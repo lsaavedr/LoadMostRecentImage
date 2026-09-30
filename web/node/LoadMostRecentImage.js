@@ -15,11 +15,11 @@ app.registerExtension({
                 try { originalOnExecuted.call(this, message); } catch(e) {}
             }
             try {
-                if (message && message.reset_counter) {
-                    const values = message.reset_counter;
+                if (message && message.iter) {
+                    const values = message.iter;
                     if (Array.isArray(values) && values.length > 0) {
                         const newValue = values[0];
-                        const widget = node.widgets?.find(w => w.name === "reset_counter");
+                        const widget = node.widgets?.find(w => w.name === "iter");
                         if (widget) {
                             widget.value = newValue;
                             if (widget.callback) {

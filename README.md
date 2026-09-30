@@ -2,7 +2,7 @@
 
 Loads the **newest image** (by modified or created timestamp) from a specified folder, with optional fallback handling and **automatic prompt extraction** from embedded ComfyUI metadata.
 
-It also tracks a **persistent history of resolved outputs** (paths only) per workflow configuration, indexed by a `reset_counter` widget that auto-increments with every run.
+It also tracks a **persistent history of resolved outputs** (paths only) per workflow configuration, indexed by an `iter` widget that auto-increments with every run.
 
 Ideal for:
 
@@ -38,7 +38,7 @@ No external Python dependencies beyond core ComfyUI and PIL (already included).
 | `sort_by` | `modified`/`created` | Use modified or creation time (default `modified`). |
 | `fallback_path` | `STRING` (optional) | Specific file to load if nothing is found in the directory. |
 | `fallback_image` | `IMAGE` (optional) | Direct image tensor fallback. Triggers history tracking when connected. |
-| `reset_counter` | `INT` (optional) | Index into the output history. Auto-increments each run. |
+| `iter` | `INT` (optional) | Index into the output history. Auto-increments each run. |
 
 ## Outputs
 
@@ -60,18 +60,18 @@ When the configured directory is empty:
 2. **`fallback_image`** (if connected): return this tensor.
 3. Otherwise, raise an error.
 
-## Output History and `reset_counter`
+## Output History and `iter`
 
-When `fallback_image` is connected, the node keeps a **persistent history of resolved outputs** for the current workflow configuration (directory + pattern + recursive + sort_by + fallback_path). Each run appends one entry and `reset_counter` auto-increments to `len(history)`.
+When `fallback_image` is connected, the node keeps a **persistent history of resolved outputs** for the current workflow configuration (directory + pattern + recursive + sort_by + fallback_path). Each run appends one entry and `iter` auto-increments to `len(history)`.
 
 State is stored at `/root/.cache/comfyui_load_most_recent_image/<key>.json` where `<key>` is an md5 hash of the configuration. Only paths are stored, never tensors or pixel data.
 
 ### Behavior
 
-- **First run with a new tensor**: `reset_counter` becomes `1`, history starts with `[fallback::<tensor_signature>]`.
-- **Subsequent runs with the same tensor**: `reset_counter` auto-increments by 1, history grows with each resolved output.
+- **First run with a new tensor**: `iter` becomes `1`, history starts with `[fallback::<tensor_signature>]`.
+- **Subsequent runs with the same tensor**: `iter` auto-increments by 1, history grows with each resolved output.
 - **Tensor changes**: history resets to `[fallback::<new_tensor_signature>]`, counter becomes `1`.
-- **Manual override**: you can drag `reset_counter` down to look back at a previous entry. On the next run, the widget will auto-increment again to the latest position.
+- **Manual override**: you can drag `iter` down to look back at a previous entry. On the next run, the widget will auto-increment again to the latest position.
 
 The frontend extension `web/js/LoadMostRecentImage.js` updates the widget value automatically after each execution. If the widget doesn't update visually in your frontend, the backend behavior is still correct (check `[LMR]` lines in the ComfyUI logs).
 

@@ -292,7 +292,7 @@ class LoadMostRecentImage:
                 "sort_by": (["modified", "created"], {"default": "modified"}),
                 "fallback_path": ("STRING", {"default": "", "multiline": False}),
                 "fallback_image": ("IMAGE",),
-                "reset_counter": ("INT", {
+                "iter": ("INT", {
                     "default": 0,
                     "min": 0,
                     "max": 1000000,
@@ -324,12 +324,12 @@ class LoadMostRecentImage:
             sort_by = (kwargs.get("sort_by") or "modified").strip()
             fallback_path = (kwargs.get("fallback_path") or "").strip()
             fallback_image = kwargs.get("fallback_image")
-            reset_counter = int(kwargs.get("reset_counter") or 0)
+            iter = int(kwargs.get("iter") or 0)
 
             fb_id = _tensor_signature(fallback_image) if fallback_image is not None else "none"
 
             if fallback_image is not None:
-                return f"fallback_image::{fb_id}::rst::{reset_counter}::{time.time_ns()}"
+                return f"fallback_image::{fb_id}::rst::{iter}::{time.time_ns()}"
 
             dir_path = Path(directory).expanduser()
 
@@ -341,17 +341,17 @@ class LoadMostRecentImage:
                     fp = Path(fallback_path).expanduser()
                     if fp.exists() and fp.is_file():
                         try:
-                            return f"fallback::{fp}::{fp.stat().st_mtime_ns}::rst::{reset_counter}"
+                            return f"fallback::{fp}::{fp.stat().st_mtime_ns}::rst::{iter}"
                         except Exception:
                             pass
                 try:
-                    return f"empty::{dir_path.resolve()}::{dir_path.stat().st_mtime_ns}::rst::{reset_counter}"
+                    return f"empty::{dir_path.resolve()}::{dir_path.stat().st_mtime_ns}::rst::{iter}"
                 except Exception:
-                    return f"empty::{dir_path}::{time.time_ns()}::rst::{reset_counter}"
+                    return f"empty::{dir_path}::{time.time_ns()}::rst::{iter}"
 
             latest = _pick_most_recent(files, sort_by)
             ts = latest.stat().st_mtime_ns if sort_by == "modified" else latest.stat().st_ctime_ns
-            return f"{latest}::{ts}::rst::{reset_counter}"
+            return f"{latest}::{ts}::rst::{iter}"
         except Exception:
             return time.time_ns()
 
@@ -388,7 +388,7 @@ class LoadMostRecentImage:
 
     def load(self, directory, pattern=DEFAULT_PATTERN,
              recursive="false", sort_by="modified", fallback_path="",
-             fallback_image=None, reset_counter=0,
+             fallback_image=None, iter=0,
              unique_id=None, extra_pnginfo=None):
 
         def _patch_workflow_counter(new_value):
@@ -405,7 +405,7 @@ class LoadMostRecentImage:
                     if str(node.get("id")) == str(uid):
                         wv = node.get("widgets_values") or []
                         for i, v in enumerate(wv):
-                            if isinstance(v, int) and node.get("widgets", [{}])[i].get("name") == "reset_counter":
+                            if isinstance(v, int) and node.get("widgets", [{}])[i].get("name") == "iter":
                                 wv[i] = int(new_value)
                                 break
                         node["widgets_values"] = wv
@@ -435,10 +435,10 @@ class LoadMostRecentImage:
         history_paths = state.get("history", [])
         last_fb_sig = state.get("last_fb_sig")
         global_counter = state.get("global_counter", len(history_paths))
-        user_idx = max(0, int(reset_counter))
+        user_idx = max(0, int(iter))
 
         import sys
-        print(f"[LMR] rc={reset_counter} ui={user_idx} gc={global_counter} hl={len(history_paths)} fb={fallback_image is not None}", file=sys.stderr, flush=True)
+        print(f"[LMR] rc={iter} ui={user_idx} gc={global_counter} hl={len(history_paths)} fb={fallback_image is not None}", file=sys.stderr, flush=True)
 
         def _save_history(new_history, new_fb_sig, new_gc):
             state["history"] = new_history
@@ -455,7 +455,7 @@ class LoadMostRecentImage:
                 _save_history(history_paths, current_fb_sig, 1)
                 _patch_workflow_counter(1)
                 result = self._load_fallback_image(fallback_image)
-                return {"ui": {"reset_counter": [1]}, "result": result}
+                return {"ui": {"iter": [1]}, "result": result}
 
             if not history_paths:
                 marker = f"fallback::{current_fb_sig}"
@@ -463,7 +463,7 @@ class LoadMostRecentImage:
                 _save_history(history_paths, current_fb_sig, 1)
                 _patch_workflow_counter(1)
                 result = self._load_fallback_image(fallback_image)
-                return {"ui": {"reset_counter": [1]}, "result": result}
+                return {"ui": {"iter": [1]}, "result": result}
 
             if user_idx < len(history_paths):
                 entry = history_paths[user_idx]
@@ -489,12 +489,12 @@ class LoadMostRecentImage:
             else:
                 result = self._load_path(Path(entry))
 
-            return {"ui": {"reset_counter": [new_gc]}, "result": result}
+            return {"ui": {"iter": [new_gc]}, "result": result}
 
         _save_history(history_paths, last_fb_sig, global_counter)
         _patch_workflow_counter(global_counter)
         result = _load_from_directory_or_fallback()
-        return {"ui": {"reset_counter": [global_counter]}, "result": result}
+        return {"ui": {"iter": [global_counter]}, "result": result}
 
 NODE_CLASS_MAPPINGS = {"LoadMostRecentImage": LoadMostRecentImage}
 NODE_DISPLAY_NAME_MAPPINGS = {"LoadMostRecentImage": "Load Most Recent Image"}
