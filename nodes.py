@@ -598,5 +598,6 @@ class LoadMostRecentImageExtension(ComfyExtension):
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [LoadMostRecentImage]
 
-    async def comfy_entrypoint(self):
-        return self
+
+async def comfy_entrypoint() -> LoadMostRecentImageExtension:
+    return LoadMostRecentImageExtension()
