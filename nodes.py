@@ -308,62 +308,75 @@ def _tensor_signature(t):
             return time.time_ns()
 
 
-class LoadMostRecentImage:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "directory": ("STRING", {"default": "", "multiline": False}),
-            },
-            "optional": {
-                "pattern": (
-                    "STRING",
-                    {
-                        "default": DEFAULT_PATTERN,
-                        "multiline": False,
-                        "tooltip": "Python regex pattern to match filenames (case-insensitive). Examples:\n.*\\.(png|jpg|jpeg|webp)$\n^2025.*\\.png$\n.*(cat|kitten).*\\.webp$",
-                    },
-                ),
-                "recursive": (["false", "true"], {"default": "false"}),
-                "sort_by": (["modified", "created"], {"default": "modified"}),
-                "fallback_path": ("STRING", {"default": "", "multiline": False}),
-                "fallback_image": ("IMAGE",),
-                "iter": (
-                    "INT",
-                    {
-                        "default": 0,
-                        "min": 0,
-                        "max": 1000000,
-                        "step": 1,
-                        "tooltip": "Index into the fallback_image history. The history grows automatically:\n"
-                        "0 = latest entry (added on each run if the tensor did not change)\n"
-                        "N = Nth entry of the history (0-based)\n"
-                        "If the counter exceeds the history length, a new entry is appended and returned.\n"
-                        "When the fallback_image tensor changes, the history resets and a new run begins.",
-                    },
-                ),
-            },
-            "hidden": {
-                "unique_id": "UNIQUE_ID",
-                "extra_pnginfo": "EXTRA_PNGINFO",
-            },
-        }
+from comfy_api.latest import ComfyExtension, io
 
-    RETURN_TYPES = ("IMAGE", "STRING", "INT", "INT", "STRING", "STRING", "STRING")
-    RETURN_NAMES = (
-        "image",
-        "path",
-        "width",
-        "height",
-        "mtime",
-        "positive_prompt",
-        "negative_prompt",
-    )
-    FUNCTION = "load"
-    CATEGORY = "image/loaders"
+
+# ----------------- V3 Node -----------------
+
+
+class LoadMostRecentImage(io.ComfyNode):
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="LoadMostRecentImage",
+            display_name="Load Most Recent Image",
+            category="image/loaders",
+            inputs=[
+                io.String.Input("directory", default="", multiline=False),
+                io.String.Input(
+                    "pattern",
+                    default=DEFAULT_PATTERN,
+                    multiline=False,
+                    tooltip="Python regex pattern to match filenames (case-insensitive). Examples:\n.*\\.(png|jpg|jpeg|webp)$\n^2025.*\\.png$\\n.*(cat|kitten).*\\.webp$",
+                    optional=True,
+                ),
+                io.Combo.Input(
+                    "recursive",
+                    options=["false", "true"],
+                    default="false",
+                    optional=True,
+                ),
+                io.Combo.Input(
+                    "sort_by",
+                    options=["modified", "created"],
+                    default="modified",
+                    optional=True,
+                ),
+                io.String.Input(
+                    "fallback_path", default="", multiline=False, optional=True
+                ),
+                io.Image.Input("fallback_image", optional=True),
+                io.Int.Input(
+                    "iter",
+                    default=0,
+                    min=0,
+                    max=1000000,
+                    step=1,
+                    tooltip="Index into the fallback_image history. The history grows automatically:\n"
+                    "0 = latest entry (added on each run if the tensor did not change)\n"
+                    "N = Nth entry of the history (0-based)\n"
+                    "If the counter exceeds the history length, a new entry is appended and returned.\n"
+                    "When the fallback_image tensor changes, the history resets and a new run begins.",
+                    optional=True,
+                ),
+            ],
+            outputs=[
+                io.Image.Output(display_name="image"),
+                io.String.Output(display_name="path"),
+                io.Int.Output(display_name="width"),
+                io.Int.Output(display_name="height"),
+                io.String.Output(display_name="mtime"),
+                io.String.Output(display_name="positive_prompt"),
+                io.String.Output(display_name="negative_prompt"),
+            ],
+            hidden=[
+                io.Hidden.unique_id,
+                io.Hidden.extra_pnginfo,
+            ],
+        )
 
     @classmethod
-    def IS_CHANGED(cls, **kwargs):
+    def fingerprint_inputs(cls, **kwargs):
         try:
             directory = (kwargs.get("directory") or "").strip()
             pattern = (kwargs.get("pattern") or DEFAULT_PATTERN).strip()
@@ -412,7 +425,8 @@ class LoadMostRecentImage:
         except Exception:
             return time.time_ns()
 
-    def _load_path(self, p: Path):
+    @classmethod
+    def _load_path(cls, p: Path):
         from PIL import Image
 
         img = Image.open(p)
@@ -427,13 +441,15 @@ class LoadMostRecentImage:
             pos, neg = "", ""
         return (tensor, str(p), w, h, mtime_str, pos, neg)
 
-    def _load_fallback_path(self, fallback_path: str):
+    @classmethod
+    def _load_fallback_path(cls, fallback_path: str):
         p = Path(fallback_path).expanduser()
         if not p.exists() or not p.is_file():
             raise ValueError(f"fallback_path does not exist or is not a file: {p}")
-        return self._load_path(p)
+        return cls._load_path(p)
 
-    def _load_fallback_image(self, fallback_image):
+    @classmethod
+    def _load_fallback_image(cls, fallback_image):
         import torch
 
         t = fallback_image
@@ -445,8 +461,9 @@ class LoadMostRecentImage:
         h, w = int(t.shape[1]), int(t.shape[2])
         return (t, "fallback:image_input", w, h, "N/A", "", "")
 
-    def load(
-        self,
+    @classmethod
+    def execute(
+        cls,
         directory,
         pattern=DEFAULT_PATTERN,
         recursive="false",
@@ -454,9 +471,9 @@ class LoadMostRecentImage:
         fallback_path="",
         fallback_image=None,
         iter=0,
-        unique_id=None,
-        extra_pnginfo=None,
-    ):
+    ) -> io.NodeOutput:
+        unique_id = cls.hidden.unique_id
+        extra_pnginfo = cls.hidden.extra_pnginfo
 
         def _patch_workflow_counter(new_value):
             try:
@@ -499,10 +516,10 @@ class LoadMostRecentImage:
         def _load_from_directory_or_fallback():
             picked = _pick_from_directory()
             if picked is not None:
-                return self._load_path(Path(picked))
+                return cls._load_path(Path(picked))
             if fallback_path.strip():
-                return self._load_fallback_path(fallback_path)
-            return self._load_fallback_image(fallback_image)
+                return cls._load_fallback_path(fallback_path)
+            return cls._load_fallback_image(fallback_image)
 
         key = _state_key(directory, pattern, recursive, sort_by, fallback_path)
         state = _load_persistent_state(key)
@@ -534,16 +551,16 @@ class LoadMostRecentImage:
                 history_paths = [marker]
                 _save_history(history_paths, current_fb_sig, 1)
                 _patch_workflow_counter(1)
-                result = self._load_fallback_image(fallback_image)
-                return {"ui": {"iter": [1]}, "result": result}
+                result = cls._load_fallback_image(fallback_image)
+                return io.NodeOutput(*result, ui={"iter": [1]})
 
             if not history_paths:
                 marker = f"fallback::{current_fb_sig}"
                 history_paths = [marker]
                 _save_history(history_paths, current_fb_sig, 1)
                 _patch_workflow_counter(1)
-                result = self._load_fallback_image(fallback_image)
-                return {"ui": {"iter": [1]}, "result": result}
+                result = cls._load_fallback_image(fallback_image)
+                return io.NodeOutput(*result, ui={"iter": [1]})
 
             if user_idx < len(history_paths):
                 entry = history_paths[user_idx]
@@ -563,15 +580,23 @@ class LoadMostRecentImage:
             _patch_workflow_counter(new_gc)
 
             if entry.startswith("fallback::"):
-                result = self._load_fallback_image(fallback_image)
+                result = cls._load_fallback_image(fallback_image)
             elif entry.startswith("fallback_path::"):
-                result = self._load_fallback_path(entry[len("fallback_path::") :])
+                result = cls._load_fallback_path(entry[len("fallback_path::") :])
             else:
-                result = self._load_path(Path(entry))
+                result = cls._load_path(Path(entry))
 
-            return {"ui": {"iter": [new_gc]}, "result": result}
+            return io.NodeOutput(*result, ui={"iter": [new_gc]})
 
         _save_history(history_paths, last_fb_sig, global_counter)
         _patch_workflow_counter(global_counter)
         result = _load_from_directory_or_fallback()
-        return {"ui": {"iter": [global_counter]}, "result": result}
+        return io.NodeOutput(*result, ui={"iter": [global_counter]})
+
+
+class LoadMostRecentImageExtension(ComfyExtension):
+    async def get_node_list(self) -> list[type[io.ComfyNode]]:
+        return [LoadMostRecentImage]
+
+    async def comfy_entrypoint(self):
+        return self

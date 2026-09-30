@@ -1,6 +1,5 @@
-from .nodes import LoadMostRecentImage
+from .nodes import LoadMostRecentImage, LoadMostRecentImageExtension, comfy_entrypoint
 
-NODE_CLASS_MAPPINGS = {"LoadMostRecentImage": LoadMostRecentImage}
-NODE_DISPLAY_NAME_MAPPINGS = {"LoadMostRecentImage": "Load Most Recent Image"}
+__all__ = ["LoadMostRecentImage", "LoadMostRecentImageExtension", "comfy_entrypoint"]
 
 WEB_DIRECTORY = "./web"
