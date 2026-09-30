@@ -1,7 +1,5 @@
 import { app } from "../../../scripts/app.js";
 
-console.log("[LMR] extension loaded");
-
 app.registerExtension({
     name: "LoadMostRecentImage.WidgetUpdate",
     async nodeCreated(node) {
@@ -33,5 +31,25 @@ app.registerExtension({
                 console.error("[LMR] error:", e);
             }
         };
+
+        const iterWidget = node.widgets?.find(w => w.name === "iter");
+        if (iterWidget) {
+            const originalCallback = iterWidget.callback;
+            iterWidget.callback = function(value, ...args) {
+                if (originalCallback) {
+                    try { originalCallback.call(this, value, ...args); } catch(e) {}
+                }
+                (async () => {
+                    try {
+                        if (typeof app.queuePrompt === "function" && typeof app.graphToPrompt === "function") {
+                            const prompt = await app.graphToPrompt();
+                            await app.queuePrompt(0, prompt, { partialExecutionTargets: [String(node.id)] });
+                        }
+                    } catch (e) {
+                        console.error("[LMR] partial exec error:", e);
+                    }
+                })();
+            };
+        }
     },
 });
