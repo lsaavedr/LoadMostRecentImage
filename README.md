@@ -20,10 +20,11 @@ The directory contains:
 
 ```
 LoadMostRecentImage/
-  __init__.py                    # Node code
+  __init__.py                    # Entry point: imports and registers the node
+  nodes.py                       # Node implementation (helpers, LoadMostRecentImage class)
   web/
-    js/
-      LoadMostRecentImage.js     # Frontend extension to update the counter widget
+    node/
+      LoadMostRecentImage.js     # Frontend extension to update the iter widget and trigger partial execution
 ```
 
 No external Python dependencies beyond core ComfyUI and PIL (already included).
@@ -73,7 +74,9 @@ State is stored at `/root/.cache/comfyui_load_most_recent_image/<key>.json` wher
 - **Tensor changes**: history resets to `[fallback::<new_tensor_signature>]`, counter becomes `1`.
 - **Manual override**: you can drag `iter` down to look back at a previous entry. On the next run, the widget will auto-increment again to the latest position.
 
-The frontend extension `web/js/LoadMostRecentImage.js` updates the widget value automatically after each execution. If the widget doesn't update visually in your frontend, the backend behavior is still correct (check `[LMR]` lines in the ComfyUI logs).
+The frontend extension `web/node/LoadMostRecentImage.js` updates the widget value automatically after each execution, and uses ComfyUI's partial execution API to re-run only this node (not the whole workflow) when `iter` is changed manually — so the connected `PreviewImage` (or any downstream node) updates live without re-running the full pipeline.
+
+If the widget doesn't update visually in your frontend, the backend behavior is still correct (check `[LMR]` lines in the ComfyUI logs).
 
 ## Prompt Extraction
 
