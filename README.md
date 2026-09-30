@@ -41,15 +41,20 @@ No external Python dependencies beyond core ComfyUI and PIL (already included).
 | `fallback_image` | `IMAGE` (optional) | Direct image tensor fallback. Triggers history tracking when connected. |
 | `iter` | `INT` (optional) | Index into the output history. Auto-increments each run. |
 
+Hidden inputs (used internally):
+
+- `unique_id`: ComfyUI node ID (used to update the workflow JSON with the new `iter` value).
+- `extra_pnginfo`: ComfyUI workflow metadata (same purpose as `unique_id`).
+
 ## Outputs
 
 | Name | Type | Description |
 |------|------|-------------|
 | `image` | `IMAGE` | The loaded image as a standard ComfyUI tensor. |
-| `path` | `STRING` | Full path of the loaded file (or `fallback:image_input` for tensor fallback). |
+| `path` | `STRING` | Full path of the loaded file, or `fallback:image_input` for tensor fallback. |
 | `width` | `INT` | Image width. |
 | `height` | `INT` | Image height. |
-| `mtime` | `STRING` | Human-readable modified timestamp (or `N/A` for tensor fallback). |
+| `mtime` | `STRING` | Human-readable modified timestamp, or `N/A` for tensor fallback. |
 | `positive_prompt` | `STRING` | Extracted from PNG tEXt chunk if present. |
 | `negative_prompt` | `STRING` | Extracted from PNG tEXt chunk if present. |
 
@@ -65,7 +70,13 @@ When the configured directory is empty:
 
 When `fallback_image` is connected, the node keeps a **persistent history of resolved outputs** for the current workflow configuration (directory + pattern + recursive + sort_by + fallback_path). Each run appends one entry and `iter` auto-increments to `len(history)`.
 
-State is stored at `/root/.cache/comfyui_load_most_recent_image/<key>.json` where `<key>` is an md5 hash of the configuration. Only paths are stored, never tensors or pixel data.
+State is stored at `/root/.cache/comfyui_load_most_recent_image/<key>.json`, where `<key>` is an md5 hash of the configuration. Only paths are stored, never tensors or pixel data.
+
+History entries can be:
+
+- `fallback::<tensor_signature>` — the current `fallback_image` input tensor.
+- `fallback_path::<path>` — the configured `fallback_path`.
+- `/abs/path/to/file.png` — an image file picked from the directory.
 
 ### Behavior
 
@@ -107,5 +118,3 @@ The persistent state JSON files live at:
 ```
 
 Delete this directory to clear all histories.
-
-Perfect companion for Save Image nodes in iterative generation.
