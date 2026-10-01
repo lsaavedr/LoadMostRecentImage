@@ -37,7 +37,6 @@ No external Python dependencies beyond core ComfyUI and PIL (already included).
 | `pattern` | `STRING` (optional) | Regex filter for filenames. Default: common image extensions. |
 | `recursive` | `true`/`false` | Scan subfolders (default `false`). |
 | `sort_by` | `modified`/`created` | Use modified or creation time (default `modified`). |
-| `fallback_path` | `STRING` (optional) | Specific file to load if nothing is found in the directory. |
 | `fallback_image` | `IMAGE` (optional) | Direct image tensor fallback. Triggers history tracking when connected. |
 | `iter` | `INT` (optional) | Index into the output history. Auto-increments each run. |
 
@@ -55,20 +54,18 @@ No external Python dependencies beyond core ComfyUI and PIL (already included).
 
 When the configured directory is empty:
 
-1. **`fallback_path`** (if set): load the file at this path.
-2. **`fallback_image`** (if connected): return this tensor.
-3. Otherwise, raise an error.
+1. **`fallback_image`** (if connected): return this tensor.
+2. Otherwise, raise an error.
 
 ## Output History and `iter`
 
-When `fallback_image` is connected, the node keeps a **persistent history of resolved outputs** for the current workflow configuration (directory + pattern + recursive + sort_by + fallback_path). Each run appends one entry and `iter` auto-increments to `len(history)`.
+When `fallback_image` is connected, the node keeps a **persistent history of resolved outputs** for the current workflow configuration (directory + pattern + recursive + sort_by). Each run appends one entry and `iter` auto-increments to `len(history)`.
 
 State is stored at `/root/.cache/comfyui_load_most_recent_image/<key>.json`, where `<key>` is an md5 hash of the configuration. Only paths are stored, never tensors or pixel data.
 
 History entries can be:
 
 - `fallback::<tensor_signature>` — the current `fallback_image` input tensor.
-- `fallback_path::<path>` — the configured `fallback_path`.
 - `/abs/path/to/file.png` — an image file picked from the directory.
 
 ### Behavior

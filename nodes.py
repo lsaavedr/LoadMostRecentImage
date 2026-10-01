@@ -65,13 +65,12 @@ _STATE_DIR = Path("/root/.cache/comfyui_load_most_recent_image")
 _STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _state_key(directory, pattern, recursive, sort_by, fallback_path):
+def _state_key(directory, pattern, recursive, sort_by):
     h = hashlib.md5()
     h.update(str(directory).encode())
     h.update(str(pattern).encode())
     h.update(str(recursive).encode())
     h.update(str(sort_by).encode())
-    h.update(str(fallback_path).encode())
     return h.hexdigest()
 
 
@@ -164,9 +163,6 @@ class LoadMostRecentImage(io.ComfyNode):
                     default="modified",
                     optional=True,
                 ),
-                io.String.Input(
-                    "fallback_path", default="", multiline=False, optional=True
-                ),
                 io.Image.Input("fallback_image", optional=True),
                 io.Int.Input(
                     "iter",
@@ -198,7 +194,6 @@ class LoadMostRecentImage(io.ComfyNode):
             pattern = (kwargs.get("pattern") or DEFAULT_PATTERN).strip()
             recursive = (kwargs.get("recursive") or "false") == "true"
             sort_by = (kwargs.get("sort_by") or "modified").strip()
-            fallback_path = (kwargs.get("fallback_path") or "").strip()
             fallback_image = kwargs.get("fallback_image")
             iter = int(kwargs.get("iter") or 0)
 
@@ -217,15 +212,6 @@ class LoadMostRecentImage(io.ComfyNode):
             files = list({p.resolve() for p in files if p.exists()})
 
             if not files:
-                if fallback_path:
-                    fp = Path(fallback_path).expanduser()
-                    if fp.exists() and fp.is_file():
-                        try:
-                            return (
-                                f"fallback::{fp}::{fp.stat().st_mtime_ns}::rst::{iter}"
-                            )
-                        except Exception:
-                            pass
                 try:
                     return f"empty::{dir_path.resolve()}::{dir_path.stat().st_mtime_ns}::rst::{iter}"
                 except Exception:
@@ -254,13 +240,6 @@ class LoadMostRecentImage(io.ComfyNode):
         return (tensor, str(p), w, h, mtime_str)
 
     @classmethod
-    def _load_fallback_path(cls, fallback_path: str):
-        p = Path(fallback_path).expanduser()
-        if not p.exists() or not p.is_file():
-            raise ValueError(f"fallback_path does not exist or is not a file: {p}")
-        return cls._load_path(p)
-
-    @classmethod
     def _load_fallback_image(cls, fallback_image):
         import torch
 
@@ -280,7 +259,6 @@ class LoadMostRecentImage(io.ComfyNode):
         pattern=DEFAULT_PATTERN,
         recursive="false",
         sort_by="modified",
-        fallback_path="",
         fallback_image=None,
         iter=0,
     ) -> io.NodeOutput:
@@ -296,11 +274,9 @@ class LoadMostRecentImage(io.ComfyNode):
             picked = _pick_from_directory()
             if picked is not None:
                 return cls._load_path(Path(picked))
-            if fallback_path.strip():
-                return cls._load_fallback_path(fallback_path)
             return cls._load_fallback_image(fallback_image)
 
-        key = _state_key(directory, pattern, recursive, sort_by, fallback_path)
+        key = _state_key(directory, pattern, recursive, sort_by)
         state = _load_persistent_state(key)
 
         history_paths = state.get("history", [])
@@ -344,10 +320,7 @@ class LoadMostRecentImage(io.ComfyNode):
             else:
                 picked = _pick_from_directory()
                 if picked is None:
-                    if fallback_path.strip():
-                        entry = f"fallback_path::{fallback_path}"
-                    else:
-                        entry = f"fallback::{current_fb_sig}"
+                    entry = f"fallback::{current_fb_sig}"
                 else:
                     entry = picked
 
@@ -357,8 +330,6 @@ class LoadMostRecentImage(io.ComfyNode):
 
             if entry.startswith("fallback::"):
                 result = cls._load_fallback_image(fallback_image)
-            elif entry.startswith("fallback_path::"):
-                result = cls._load_fallback_path(entry[len("fallback_path::") :])
             else:
                 result = cls._load_path(Path(entry))
 
