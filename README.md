@@ -41,11 +41,6 @@ No external Python dependencies beyond core ComfyUI and PIL (already included).
 | `fallback_image` | `IMAGE` (optional) | Direct image tensor fallback. Triggers history tracking when connected. |
 | `iter` | `INT` (optional) | Index into the output history. Auto-increments each run. |
 
-Hidden inputs (used internally):
-
-- `unique_id`: ComfyUI node ID (used to update the workflow JSON with the new `iter` value).
-- `extra_pnginfo`: ComfyUI workflow metadata (same purpose as `unique_id`).
-
 ## Outputs
 
 | Name | Type | Description |

@@ -189,11 +189,6 @@ class LoadMostRecentImage(io.ComfyNode):
                 io.Int.Output(display_name="height"),
                 io.String.Output(display_name="mtime"),
             ],
-            hidden=[
-                io.Hidden.unique_id,
-                io.Hidden.prompt,
-                io.Hidden.extra_pnginfo,
-            ],
         )
 
     @classmethod
@@ -289,39 +284,6 @@ class LoadMostRecentImage(io.ComfyNode):
         fallback_image=None,
         iter=0,
     ) -> io.NodeOutput:
-        unique_id = cls.hidden.unique_id
-        extra_pnginfo = cls.hidden.extra_pnginfo
-
-        def _patch_workflow_counter(new_value):
-            try:
-                if unique_id is None or extra_pnginfo is None:
-                    return
-                if not isinstance(extra_pnginfo, list) or not extra_pnginfo:
-                    return
-                if (
-                    not isinstance(extra_pnginfo[0], dict)
-                    or "workflow" not in extra_pnginfo[0]
-                ):
-                    return
-                workflow = extra_pnginfo[0]["workflow"]
-                uid = (
-                    unique_id[0] if isinstance(unique_id, (list, tuple)) else unique_id
-                )
-                for node in workflow.get("nodes", []):
-                    if str(node.get("id")) == str(uid):
-                        wv = node.get("widgets_values") or []
-                        for i, v in enumerate(wv):
-                            if (
-                                isinstance(v, int)
-                                and node.get("widgets", [{}])[i].get("name") == "iter"
-                            ):
-                                wv[i] = int(new_value)
-                                break
-                        node["widgets_values"] = wv
-                        break
-            except Exception:
-                pass
-
         def _pick_from_directory():
             dir_path = Path(directory).expanduser()
             files = _list_images(dir_path, pattern, recursive == "true")
@@ -367,7 +329,6 @@ class LoadMostRecentImage(io.ComfyNode):
                 marker = f"fallback::{current_fb_sig}"
                 history_paths = [marker]
                 _save_history(history_paths, current_fb_sig, 1)
-                _patch_workflow_counter(1)
                 result = cls._load_fallback_image(fallback_image)
                 return io.NodeOutput(*result, ui={"iter": [1]})
 
@@ -375,7 +336,6 @@ class LoadMostRecentImage(io.ComfyNode):
                 marker = f"fallback::{current_fb_sig}"
                 history_paths = [marker]
                 _save_history(history_paths, current_fb_sig, 1)
-                _patch_workflow_counter(1)
                 result = cls._load_fallback_image(fallback_image)
                 return io.NodeOutput(*result, ui={"iter": [1]})
 
@@ -394,7 +354,6 @@ class LoadMostRecentImage(io.ComfyNode):
             history_paths.append(entry)
             new_gc = len(history_paths)
             _save_history(history_paths, current_fb_sig, new_gc)
-            _patch_workflow_counter(new_gc)
 
             if entry.startswith("fallback::"):
                 result = cls._load_fallback_image(fallback_image)
@@ -406,6 +365,5 @@ class LoadMostRecentImage(io.ComfyNode):
             return io.NodeOutput(*result, ui={"iter": [new_gc]})
 
         _save_history(history_paths, last_fb_sig, global_counter)
-        _patch_workflow_counter(global_counter)
         result = _load_from_directory_or_fallback()
         return io.NodeOutput(*result, ui={"iter": [global_counter]})
