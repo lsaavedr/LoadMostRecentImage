@@ -7,6 +7,15 @@ app.registerExtension({
             return;
         }
 
+        const iterWidget = node.widgets?.find(w => w.name === "iter");
+        if (!iterWidget) {
+            return;
+        }
+
+        if (iterWidget.value === undefined || iterWidget.value === null || iterWidget.value === "") {
+            iterWidget.value = 0;
+        }
+
         const originalOnExecuted = node.onExecuted;
         node.onExecuted = function(message) {
             if (originalOnExecuted) {
@@ -32,24 +41,35 @@ app.registerExtension({
             }
         };
 
-        const iterWidget = node.widgets?.find(w => w.name === "iter");
-        if (iterWidget) {
-            const originalCallback = iterWidget.callback;
-            iterWidget.callback = function(value, ...args) {
-                if (originalCallback) {
-                    try { originalCallback.call(this, value, ...args); } catch(e) {}
-                }
-                (async () => {
-                    try {
-                        if (typeof app.queuePrompt === "function" && typeof app.graphToPrompt === "function") {
-                            const prompt = await app.graphToPrompt();
-                            await app.queuePrompt(0, prompt, { partialExecutionTargets: [String(node.id)] });
-                        }
-                    } catch (e) {
-                        console.error("[LMR] partial exec error:", e);
+        const originalCallback = iterWidget.callback;
+        iterWidget.callback = function(value, ...args) {
+            if (value === undefined || value === null || value === "") {
+                value = 0;
+            }
+            if (originalCallback) {
+                try { originalCallback.call(this, value, ...args); } catch(e) {}
+            }
+            (async () => {
+                try {
+                    if (typeof app.queuePrompt === "function" && typeof app.graphToPrompt === "function") {
+                        const prompt = await app.graphToPrompt();
+                        await app.queuePrompt(0, prompt, { partialExecutionTargets: [String(node.id)] });
                     }
-                })();
-            };
+                } catch (e) {
+                    console.error("[LMR] partial exec error:", e);
+                }
+            })();
+        };
+    },
+    async afterConfigureGraph() {
+        for (const node of app.graph._nodes || []) {
+            if (node.comfyClass !== "LoadMostRecentImage") {
+                continue;
+            }
+            const iterWidget = node.widgets?.find(w => w.name === "iter");
+            if (iterWidget && (iterWidget.value === undefined || iterWidget.value === null || iterWidget.value === "")) {
+                iterWidget.value = 0;
+            }
         }
     },
 });
