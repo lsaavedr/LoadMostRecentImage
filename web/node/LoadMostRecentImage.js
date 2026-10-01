@@ -13,7 +13,7 @@ app.registerExtension({
                 try { originalOnExecuted.call(this, message); } catch(e) {}
             }
             try {
-                if (message && message.iter) {
+                if (message && message.iter !== undefined) {
                     const values = message.iter;
                     if (Array.isArray(values) && values.length > 0) {
                         const newValue = values[0];
