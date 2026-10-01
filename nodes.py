@@ -59,184 +59,6 @@ def _pil_to_tensor(img):
     return t
 
 
-# ----------------- ComfyUI-first prompt extraction -----------------
-
-
-def _safe_json_load(s):
-    import json
-
-    try:
-        return json.loads(s)
-    except Exception:
-        return None
-
-
-def _extract_from_comfy_json_blob(blob):
-    """
-    blob: PNG tEXt 'prompt' value (JSON). Structure is the serialized prompt, e.g.:
-      { "3": {"class_type": "CLIPTextEncode", "inputs": {"text":"...","clip":[...]}}, ... }
-    Return (positive, negative) by tracing CLIP encoders feeding KSampler positive/negative.
-    """
-    data = _safe_json_load(blob)
-    if not isinstance(data, dict):
-        return "", ""
-
-    nodes = {}
-    for nid, node in data.items():
-        if isinstance(node, dict) and "class_type" in node and "inputs" in node:
-            nodes[str(nid)] = (node["class_type"], node["inputs"])
-
-    clip_types = {
-        "CLIPTextEncode",
-        "CLIPTextEncodeSDXL",
-        "CLIPTextEncodeAdvanced",
-        "CLIPTextEncode (Prompt)",
-        "CLIPTextEncode (SDXL Prompt)",
-    }
-    sampler_types = {
-        "KSampler",
-        "KSamplerAdvanced",
-        "KSampler (Efficient)",
-        "KSamplerSDXL",
-    }
-
-    pos_ids, neg_ids = set(), set()
-    for nid, (ctype, ninputs) in nodes.items():
-        if ctype in sampler_types and isinstance(ninputs, dict):
-            pos = ninputs.get("positive")
-            neg = ninputs.get("negative")
-            if (
-                isinstance(pos, (list, tuple))
-                and pos
-                and isinstance(pos[0], (str, int))
-            ):
-                pos_ids.add(str(pos[0]))
-            if (
-                isinstance(neg, (list, tuple))
-                and neg
-                and isinstance(neg[0], (str, int))
-            ):
-                neg_ids.add(str(neg[0]))
-
-    def txt_from_enc(inputs):
-        texts = []
-        for k in ("text", "text_g", "text_l"):
-            v = inputs.get(k)
-            if isinstance(v, str) and v.strip():
-                texts.append(v.strip())
-        return "\n".join(texts)
-
-    def collect(ids):
-        out = []
-        for i in ids:
-            node = nodes.get(i)
-            if not node:
-                continue
-            ctype, inputs = node
-            if ctype in clip_types and isinstance(inputs, dict):
-                t = txt_from_enc(inputs)
-                if t:
-                    out.append(t)
-        return out
-
-    pos_texts = collect(pos_ids)
-    neg_texts = collect(neg_ids)
-
-    # Fallback: gather all encoders if no sampler wiring found
-    if not pos_texts and not neg_texts:
-        for nid, (ctype, ninputs) in nodes.items():
-            if ctype in clip_types and isinstance(ninputs, dict):
-                t = txt_from_enc(ninputs)
-                if t:
-                    if "neg" in str(nid).lower():
-                        neg_texts.append(t)
-                    else:
-                        pos_texts.append(t)
-
-    return ("\n\n".join(pos_texts).strip(), "\n\n".join(neg_texts).strip())
-
-
-def _parse_a1111_block(s):
-    import re
-
-    if not isinstance(s, str) or not s.strip():
-        return "", ""
-    s = s.replace("\r\n", "\n").replace("\r", "\n")
-    m = re.search(r"\n?Negative prompt:\s*(.*)", s, flags=re.IGNORECASE | re.DOTALL)
-    if m:
-        before = s[: m.start()].strip()
-        after = m.group(1)
-        m2 = re.search(r"\n[A-Za-z][A-Za-z _\-\/]+:\s", "\n" + after)
-        negative = after[: m2.start()].strip() if m2 else after.strip()
-        return before, negative
-    m3 = re.search(r"\n[A-Za-z][A-Za-z _\-\/]+:\s", s)
-    if m3:
-        return s[: m3.start()].strip(), ""
-    return s.strip(), ""
-
-
-def _extract_prompts(img):
-    info = getattr(img, "info", {}) or {}
-
-    # 1) ComfyUI JSON in PNG text
-    blob = info.get("prompt")
-    if isinstance(blob, str) and blob.strip():
-        pos, neg = _extract_from_comfy_json_blob(blob)
-        if pos or neg:
-            return pos, neg
-
-    # 2) AUTOMATIC1111-style "parameters" blob
-    params = info.get("parameters") or info.get("Parameters")
-    if isinstance(params, str) and params.strip():
-        pos, neg = _parse_a1111_block(params)
-        if pos or neg:
-            return pos, neg
-
-    # 3) Simple prompt keys
-    for k in ("prompt", "Positive", "positive"):
-        v = info.get(k)
-        if isinstance(v, str) and v.strip():
-            pos = v.strip()
-            neg = ""
-            for nk in ("negative", "Negative", "negative_prompt", "Negative prompt"):
-                nv = info.get(nk)
-                if isinstance(nv, str) and nv.strip():
-                    neg = nv.strip()
-                    break
-            return pos, neg
-
-    # 4) JPEG EXIF fallbacks
-    try:
-        exif = img.getexif()
-    except Exception:
-        exif = None
-    if exif:
-        uc = exif.get(0x9286)
-        if isinstance(uc, bytes):
-            uc = uc[8:] if len(uc) >= 8 else uc
-            try:
-                uc = uc.decode("utf-8", errors="ignore")
-            except Exception:
-                uc = ""
-        if isinstance(uc, str) and uc.strip():
-            pos, neg = _parse_a1111_block(uc)
-            if pos or neg:
-                return pos, neg
-
-        xpc = exif.get(0x9C9C)
-        if isinstance(xpc, bytes):
-            try:
-                xpc = xpc.decode("utf-16le", errors="ignore").rstrip("\x00")
-            except Exception:
-                xpc = ""
-        if isinstance(xpc, str) and xpc.strip():
-            pos, neg = _parse_a1111_block(xpc)
-            if pos or neg:
-                return pos, neg
-
-    return "", ""
-
-
 # ----------------- Node -----------------
 
 _STATE_DIR = Path("/root/.cache/comfyui_load_most_recent_image")
@@ -308,7 +130,7 @@ def _tensor_signature(t):
             return time.time_ns()
 
 
-from comfy_api.latest import ComfyExtension, io
+from comfy_api.latest import io
 
 
 # ----------------- V3 Node -----------------
@@ -366,11 +188,10 @@ class LoadMostRecentImage(io.ComfyNode):
                 io.Int.Output(display_name="width"),
                 io.Int.Output(display_name="height"),
                 io.String.Output(display_name="mtime"),
-                io.String.Output(display_name="positive_prompt"),
-                io.String.Output(display_name="negative_prompt"),
             ],
             hidden=[
                 io.Hidden.unique_id,
+                io.Hidden.prompt,
                 io.Hidden.extra_pnginfo,
             ],
         )
@@ -435,11 +256,7 @@ class LoadMostRecentImage(io.ComfyNode):
         h, w = int(tensor.shape[1]), int(tensor.shape[2])
         ts = time.localtime(p.stat().st_mtime)
         mtime_str = time.strftime("%Y-%m-%d %H:%M:%S", ts)
-        try:
-            pos, neg = _extract_prompts(img)
-        except Exception:
-            pos, neg = "", ""
-        return (tensor, str(p), w, h, mtime_str, pos, neg)
+        return (tensor, str(p), w, h, mtime_str)
 
     @classmethod
     def _load_fallback_path(cls, fallback_path: str):
@@ -459,7 +276,7 @@ class LoadMostRecentImage(io.ComfyNode):
             raise ValueError("fallback_image must be a tensor of shape [B,H,W,C].")
         t = t[:1, ...]
         h, w = int(t.shape[1]), int(t.shape[2])
-        return (t, "fallback:image_input", w, h, "N/A", "", "")
+        return (t, "fallback:image_input", w, h, "N/A")
 
     @classmethod
     def execute(
@@ -592,12 +409,3 @@ class LoadMostRecentImage(io.ComfyNode):
         _patch_workflow_counter(global_counter)
         result = _load_from_directory_or_fallback()
         return io.NodeOutput(*result, ui={"iter": [global_counter]})
-
-
-class LoadMostRecentImageExtension(ComfyExtension):
-    async def get_node_list(self) -> list[type[io.ComfyNode]]:
-        return [LoadMostRecentImage]
-
-
-async def comfy_entrypoint() -> LoadMostRecentImageExtension:
-    return LoadMostRecentImageExtension()

@@ -1,6 +1,6 @@
 # Load Most Recent Image for ComfyUI
 
-Loads the **newest image** (by modified or created timestamp) from a specified folder, with optional fallback handling and **automatic prompt extraction** from embedded ComfyUI metadata.
+Loads the **newest image** (by modified or created timestamp) from a specified folder, with optional fallback handling.
 
 It also tracks a **persistent history of resolved outputs** (paths only) per workflow configuration, indexed by an `iter` widget that auto-increments with every run.
 
@@ -55,8 +55,6 @@ Hidden inputs (used internally):
 | `width` | `INT` | Image width. |
 | `height` | `INT` | Image height. |
 | `mtime` | `STRING` | Human-readable modified timestamp, or `N/A` for tensor fallback. |
-| `positive_prompt` | `STRING` | Extracted from PNG tEXt chunk if present. |
-| `negative_prompt` | `STRING` | Extracted from PNG tEXt chunk if present. |
 
 ## Fallback Chain
 
@@ -89,15 +87,6 @@ The frontend extension `web/node/LoadMostRecentImage.js` updates the widget valu
 
 If the widget doesn't update visually in your frontend, the backend behavior is still correct (check `[LMR]` lines in the ComfyUI logs).
 
-## Prompt Extraction
-
-The node extracts positive/negative prompts from the loaded image in this order:
-
-1. **ComfyUI JSON** in the PNG `prompt` text chunk (traces `CLIPTextEncode` nodes feeding the `KSampler`).
-2. **AUTOMATIC1111** `parameters` block (parses `Negative prompt:` sections).
-3. **Simple prompt keys** (`prompt`, `positive`, etc.).
-4. **JPEG EXIF** fallbacks (UserComment and XPComment tags).
-
 ## Caching
 
 `IS_CHANGED` returns a unique value whenever the directory contents, fallback path, fallback image signature, or counter change. When `fallback_image` is connected, it always returns a timestamped value to ensure re-execution on every run.
@@ -106,7 +95,6 @@ The node extracts positive/negative prompts from the loaded image in this order:
 
 - Connect to an Upscale or Inpaint node → instantly process your latest output.
 - Chain multiple: load most recent → apply variation → save → repeat.
-- Review loop: load recent → preview → tweak prompts based on extracted text.
 - Step backward through your iteration history while continuing to advance with the same upstream tensor.
 
 ## State Location
