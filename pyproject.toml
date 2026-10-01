@@ -1,0 +1,21 @@
+[project]
+name = "load-most-recent-image"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "numpy>=2.5.3",
+    "pillow>=12.3.0",
+    "torch>=2.14.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "--import-mode=importlib"

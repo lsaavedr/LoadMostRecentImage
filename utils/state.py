@@ -1,8 +1,10 @@
 import json
+import os
 from pathlib import Path
 
-STATE_DIR = Path("/root/.cache/comfyui_load_most_recent_image")
-STATE_DIR.mkdir(parents=True, exist_ok=True)
+STATE_DIR = Path(
+    os.environ.get("LMRI_STATE_DIR", "/root/.cache/comfyui_load_most_recent_image")
+)
 
 
 def state_path(key):
@@ -22,6 +24,7 @@ def load_persistent_state(key):
 
 def save_persistent_state(key, state):
     try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
         p = state_path(key)
         tmp = p.with_suffix(".tmp")
         with tmp.open("w", encoding="utf-8") as f:

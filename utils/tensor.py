@@ -3,7 +3,7 @@ import hashlib
 import torch
 
 
-def tensor_signature(t):
+def tensor_signature(t) -> str:
     """Stable identifier for a fallback IMAGE tensor (changes when the tensor changes)."""
     try:
         if not isinstance(t, torch.Tensor):
@@ -20,13 +20,12 @@ def tensor_signature(t):
             .tobytes()
         )
         h.update(sample)
-        h.update(bytes(t.data_ptr() if hasattr(t, "data_ptr") else b""))
         return h.hexdigest()
     except Exception:
         try:
             return f"id::{id(t)}::{getattr(t, 'shape', '?')}"
         except Exception:
-            return time.time_ns()
+            return str(time.time_ns())
 
 
 def prepare_fallback_tensor(tensor):
@@ -36,9 +35,11 @@ def prepare_fallback_tensor(tensor):
     """
     if tensor is None:
         return None
+
     if not isinstance(tensor, torch.Tensor) or tensor.ndim != 4:
         raise ValueError("fallback_image must be a tensor of shape [B,H,W,C].")
+
     t = tensor[:1, ...]
     h, w = int(t.shape[1]), int(t.shape[2])
-    return (t, "fallback:image_input", w, h, "N/A")
 
+    return (t, "fallback:image_input", w, h, "N/A")

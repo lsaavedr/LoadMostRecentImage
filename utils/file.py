@@ -54,9 +54,6 @@ def pil_to_tensor(img):
 
     arr = np.asarray(img, dtype=np.float32) / 255.0  # H,W,3
 
-    if arr.ndim == 2:
-        arr = arr[:, :, None]
-
     t = torch.from_numpy(arr).unsqueeze(0)  # [1,H,W,C]
 
     return t

@@ -1,4 +1,3 @@
-import sys
 import time
 
 from comfy_api.latest import io
@@ -119,21 +118,16 @@ class LoadMostRecentImage(io.ComfyNode):
     ) -> io.NodeOutput:
         user_idx = max(0, int(iter))
 
-        print(
-            f"[LMR] rc={iter} ui={user_idx} fb={fallback_image is not None}",
-            file=sys.stderr,
-            flush=True,
-        )
-
         key = make_state_key(directory, pattern, recursive, sort_by)
         state = HistoryState.load(key)
 
         if fallback_image is not None:
-            current_sig = str(tensor_signature(fallback_image))
+            current_sig = tensor_signature(fallback_image)
 
             if current_sig != state.last_fb_sig or not state.history:
                 state.reset_for_tensor(current_sig)
                 result = prepare_fallback_tensor(fallback_image)
+
                 assert result is not None
                 return io.NodeOutput(*result, ui={"iter": [1]})
 
@@ -145,23 +139,25 @@ class LoadMostRecentImage(io.ComfyNode):
                     current_sig,
                 )
 
-            new_gc = state.append_entry(entry, current_sig)
+            next_iter = state.append_entry(entry, current_sig)
 
-            if is_fallback_marker(entry):
-                result = prepare_fallback_tensor(fallback_image)
-            else:
-                result = load_image_with_metadata(Path(entry))
+            result = (
+                prepare_fallback_tensor(fallback_image)
+                if is_fallback_marker(entry)
+                else load_image_with_metadata(Path(entry))
+            )
 
             assert result is not None
-            return io.NodeOutput(*result, ui={"iter": [new_gc]})
+            return io.NodeOutput(*result, ui={"iter": [next_iter]})
 
         state.save()
-        picked = pick_latest_image(directory, pattern, recursive == "true")
-        if picked is not None:
-            result = load_image_with_metadata(Path(picked))
-        else:
-            result = prepare_fallback_tensor(fallback_image)
-            if result is None:
-                raise ValueError("No images found and no fallback_image provided.")
 
+        picked = pick_latest_image(directory, pattern, recursive == "true")
+        result = (
+            load_image_with_metadata(Path(picked))
+            if picked is not None
+            else prepare_fallback_tensor(fallback_image)
+        )
+
+        assert result is not None
         return io.NodeOutput(*result, ui={"iter": [state.global_counter]})
