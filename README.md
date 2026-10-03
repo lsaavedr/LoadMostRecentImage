@@ -13,21 +13,58 @@ Ideal for:
 
 ## Installation
 
+### Manual
+
 1. Copy the `LoadMostRecentImage/` folder into your `ComfyUI/custom_nodes/` directory.
 2. Restart ComfyUI or reload custom nodes.
 
-The directory contains:
+### Development (with `uv`)
+
+```bash
+git clone <repo-url>
+cd LoadMostRecentImage
+uv sync --group dev
+```
+
+## Project Structure
 
 ```
 LoadMostRecentImage/
-  __init__.py                    # Entry point: imports and registers the node
-  nodes.py                       # Node implementation (helpers, LoadMostRecentImage class)
-  web/
-    node/
-      LoadMostRecentImage.js     # Frontend extension to update the iter widget and trigger partial execution
+├── __init__.py                  # Entry point: registers the ComfyUI extension
+├── nodes.py                     # Node implementation (LoadMostRecentImage class)
+├── utils/
+│   ├── file.py                  # Image discovery, loading, and tensor conversion
+│   ├── history.py               # Persistent history state management
+│   ├── state.py                 # JSON state persistence (atomic writes)
+│   └── tensor.py                # Tensor signature and fallback preparation
+├── tests/
+│   ├── conftest.py              # Fixtures (isolated state dir per test)
+│   ├── stubs/comfy_api/         # Stub for comfy_api (not on PyPI)
+│   ├── test_file.py
+│   ├── test_history.py
+│   ├── test_state.py
+│   └── test_tensor.py
+├── web/
+│   └── node/
+│       └── LoadMostRecentImage.js  # Frontend extension for iter widget
+├── pyproject.toml               # Project metadata and dependencies
+├── uv.lock                      # Locked dependency versions
+└── .github/workflows/
+    └── tests.yml                # CI: runs pytest on push/PR
 ```
 
-No external Python dependencies beyond core ComfyUI and PIL (already included).
+## Dependencies
+
+- **Runtime**: `numpy`, `pillow`, `torch` (all included with ComfyUI)
+- **Dev**: `pytest`, `pytest-cov`
+
+## Running Tests
+
+```bash
+uv run pytest
+```
+
+The test suite includes 102 tests covering file discovery, history management, state persistence, and tensor handling. Tests run in isolation with a temporary state directory.
 
 ## Inputs
 
@@ -83,12 +120,6 @@ If the widget doesn't update visually in your frontend, the backend behavior is 
 
 `IS_CHANGED` returns a unique value whenever the directory contents, fallback path, fallback image signature, or counter change. When `fallback_image` is connected, it always returns a timestamped value to ensure re-execution on every run.
 
-## Example Use Cases
-
-- Connect to an Upscale or Inpaint node → instantly process your latest output.
-- Chain multiple: load most recent → apply variation → save → repeat.
-- Step backward through your iteration history while continuing to advance with the same upstream tensor.
-
 ## State Location
 
 The persistent state JSON files live at:
@@ -97,4 +128,20 @@ The persistent state JSON files live at:
 /root/.cache/comfyui_load_most_recent_image/
 ```
 
-Delete this directory to clear all histories.
+You can override this by setting the `LMRI_STATE_DIR` environment variable:
+
+```bash
+export LMRI_STATE_DIR=/path/to/custom/state/dir
+```
+
+Delete the directory to clear all histories.
+
+## CI/CD
+
+The project uses GitHub Actions to run the test suite on every push and pull request to `main`. See `.github/workflows/tests.yml`.
+
+## Example Use Cases
+
+- Connect to an Upscale or Inpaint node → instantly process your latest output.
+- Chain multiple: load most recent → apply variation → save → repeat.
+- Step backward through your iteration history while continuing to advance with the same upstream tensor.
