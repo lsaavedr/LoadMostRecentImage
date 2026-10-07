@@ -1,27 +1,33 @@
 class _Input:
     def __init__(self, *args, **kwargs):
-        pass
+        self.args = args
+        self.kwargs = kwargs
 
 
 class _Output:
     def __init__(self, *args, **kwargs):
-        pass
+        self.args = args
+        self.kwargs = kwargs
 
 
 class String:
     Input = _Input
+    Output = _Output
 
 
 class Combo:
     Input = _Input
+    Output = _Output
 
 
 class Image:
     Input = _Input
+    Output = _Output
 
 
 class Int:
     Input = _Input
+    Output = _Output
 
 
 class Schema:
@@ -43,13 +49,17 @@ class ComfyExtension:
     pass
 
 
-io = type("io", (), {
-    "Schema": Schema,
-    "NodeOutput": NodeOutput,
-    "ComfyNode": ComfyNode,
-    "ComfyExtension": ComfyExtension,
-    "String": String,
-    "Combo": Combo,
-    "Image": Image,
-    "Int": Int,
-})()
+io = type(
+    "io",
+    (),
+    {
+        "Schema": Schema,
+        "NodeOutput": NodeOutput,
+        "ComfyNode": ComfyNode,
+        "ComfyExtension": ComfyExtension,
+        "String": String,
+        "Combo": Combo,
+        "Image": Image,
+        "Int": Int,
+    },
+)()

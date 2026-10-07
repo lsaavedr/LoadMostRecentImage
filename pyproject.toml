@@ -28,7 +28,7 @@ lint.ignore = ["N999"]
 
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "tests/stubs"]
 addopts = "--import-mode=importlib"
 
 [tool.uv.sources]
