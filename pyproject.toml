@@ -26,10 +26,20 @@ dev = [
 target-version = "py312"
 lint.ignore = ["N999"]
 
+# Measure the plugin's own source only. `nodes.py` and the package root are
+# loaded under the `LoadMostRecentImage.*` name, so scoping to `utils` alone
+# would leave the node logic unreported.
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = [".venv/*", "*/site-packages/*", "tests/*"]
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.pytest.ini_options]
 pythonpath = [".", "tests/stubs"]
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib --cov --cov-report=term-missing --cov-fail-under=100"
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
