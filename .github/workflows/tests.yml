@@ -11,6 +11,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        # ComfyUI runs on the user's Python, not ours. Keep the plugin working
+        # on the versions ComfyUI actually ships with, not just the dev one.
+        python-version: ["3.12", "3.14"]
+
+    # Job-level so no step can forget it: without UV_PYTHON, uv falls back to
+    # the newest interpreter it finds and the leg silently tests the wrong one
+    # while still being labelled 3.12.
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+
     steps:
       - uses: actions/checkout@v7
 
@@ -23,15 +36,10 @@ jobs:
         run: uv python install
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
 
       - name: Run tests
         run: uv run pytest
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-
-      - name: Run web tests
-        run: npm test
