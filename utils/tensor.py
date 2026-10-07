@@ -4,6 +4,19 @@ import time
 import torch
 
 
+def _sample_bytes(t) -> bytes:
+    """Raw bytes of a strided sample, for dtypes numpy cannot represent.
+
+    bfloat16 and the float8 family have no numpy equivalent, so `.numpy()`
+    raises. Widening to float32 keeps the signature content-based and stable
+    across processes, which an identity-based fallback would not be.
+    """
+    try:
+        return t.numpy().tobytes()
+    except (TypeError, NotImplementedError):
+        return t.to(torch.float32).numpy().tobytes()
+
+
 def tensor_signature(t) -> str:
     """Stable identifier for a fallback IMAGE tensor (changes when the tensor changes)."""
     try:
@@ -12,15 +25,8 @@ def tensor_signature(t) -> str:
         h = hashlib.md5()
         h.update(str(tuple(t.shape)).encode())
         h.update(str(t.dtype).encode())
-        sample = (
-            t.detach()
-            .contiguous()
-            .flatten()[:: max(1, t.numel() // 64)]
-            .cpu()
-            .numpy()
-            .tobytes()
-        )
-        h.update(sample)
+        sample = t.detach().contiguous().flatten()[:: max(1, t.numel() // 64)].cpu()
+        h.update(_sample_bytes(sample))
         return h.hexdigest()
     except (AttributeError, TypeError, ValueError, RuntimeError, KeyError, OSError):
         try:

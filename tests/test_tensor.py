@@ -57,6 +57,29 @@ def test_signature_handles_large_tensors():
     assert tensor_signature(torch.rand(1, 512, 512, 3))
 
 
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float8_e4m3fn])
+def test_signature_is_content_based_for_dtypes_numpy_cannot_represent(dtype):
+    """bfloat16 and float8 have no numpy equivalent.
+
+    Widening to float32 keeps the signature content-based. An identity-based
+    fallback would carry a different value on every process, which resets the
+    fallback history whenever ComfyUI restarts.
+    """
+    a = torch.ones(1, 4, 4, 3).to(dtype)
+    b = torch.ones(1, 4, 4, 3).to(dtype)
+
+    assert len(tensor_signature(a)) == 32
+    assert tensor_signature(a) == tensor_signature(b)
+    assert tensor_signature(a) != tensor_signature(torch.zeros(1, 4, 4, 3).to(dtype))
+
+
+def test_signature_distinguishes_bfloat16_from_its_float32_widening():
+    """The dtype is part of the hash, so a cast cannot collide with a real f32."""
+    assert tensor_signature(torch.ones(1, 4, 4, 3).bfloat16()) != tensor_signature(
+        torch.ones(1, 4, 4, 3)
+    )
+
+
 def test_signature_handles_empty_tensor():
     assert tensor_signature(torch.empty(0))
 
