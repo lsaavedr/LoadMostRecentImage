@@ -1,0 +1,8 @@
+node_modules/
+.venv/
+coverage/
+.pytest_cache/
+
+# Lockfiles are generated; never reformat them.
+package-lock.json
+uv.lock

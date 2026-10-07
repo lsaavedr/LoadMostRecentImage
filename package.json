@@ -3,6 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --experimental-test-coverage --test-coverage-exclude=\"tests-js/**\" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 tests-js/*.test.js"
+    "test": "node --test --experimental-test-coverage --test-coverage-exclude=\"tests-js/**\" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 tests-js/*.test.js",
+    "format": "prettier --write \"**/*.js\"",
+    "format:check": "prettier --check \"**/*.js\""
+  },
+  "devDependencies": {
+    "prettier": "3.9.9"
   }
 }
