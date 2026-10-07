@@ -73,8 +73,14 @@ def load_image_with_metadata(path: Path) -> tuple:
     return (tensor, str(path), w, h, mtime_str)
 
 
-def pick_latest_image(directory: str, pattern: str, recursive: bool) -> str | None:
-    """Find the most recent image path, or None if no images found."""
+def pick_latest_image(
+    directory: str, pattern: str, recursive: bool, sort_by: str = "modified"
+) -> str | None:
+    """Find the most recent image path, or None if no images found.
+
+    `sort_by` must match what `fingerprint_inputs` keys the cache on, or the
+    node would report a cache entry that does not describe the image it output.
+    """
     dir_path = Path(directory).expanduser()
     files = list_images(dir_path, pattern, recursive)
     files = list({p.resolve() for p in files if p.exists()})
@@ -82,4 +88,4 @@ def pick_latest_image(directory: str, pattern: str, recursive: bool) -> str | No
     if not files:
         return None
 
-    return str(pick_most_recent(files, "modified"))
+    return str(pick_most_recent(files, sort_by))

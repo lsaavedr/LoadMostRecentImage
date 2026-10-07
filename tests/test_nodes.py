@@ -140,6 +140,29 @@ def test_execute_without_images_or_fallback_raises_actionable_error(empty_dir):
         _execute(empty_dir)
 
 
+@pytest.fixture()
+def split_sort_dir(tmp_path):
+    """Two images where mtime and ctime rank them in opposite order.
+
+    `a.png` gets an old mtime via `utime`, then a `chmod` so its ctime becomes
+    the newest -- which is what makes 'modified' and 'created' disagree.
+    """
+    d = tmp_path / "split"
+    d.mkdir()
+    Image.new("RGB", (4, 2), (255, 0, 0)).save(d / "a.png")
+    Image.new("RGB", (4, 2), (0, 255, 0)).save(d / "b.png")
+    time.sleep(0.05)
+    os.chmod(d / "a.png", 0o600)
+    stamp = 1_000_000_000_000_000_000
+    os.utime(d / "a.png", ns=(stamp, stamp))
+
+    by_mtime = max(d.iterdir(), key=lambda p: p.stat().st_mtime).name
+    by_ctime = max(d.iterdir(), key=lambda p: p.stat().st_ctime).name
+    if by_mtime == by_ctime:
+        pytest.skip("filesystem does not separate mtime from ctime")
+    return d
+
+
 def test_iter_tooltip_matches_append_ordering():
     """The tooltip says the history is append-ordered and 0 is the oldest.
 
@@ -163,6 +186,39 @@ def test_low_iter_replays_the_oldest_entry(image_dir, fallback):
 
     assert oldest.args[0].shape[0] == first.args[0].shape[0]
     assert oldest.args[1] == first.args[1] == "fallback:image_input"
+
+
+def test_execute_honours_sort_by(split_sort_dir):
+    """`sort_by` reaches the image selection, not just the cache key."""
+    modified = _execute(split_sort_dir, sort_by="modified")
+    created = _execute(split_sort_dir, sort_by="created")
+
+    assert modified.args[1] == str(split_sort_dir / "b.png")
+    assert created.args[1] == str(split_sort_dir / "a.png")
+
+
+def test_execute_sort_by_agrees_with_fingerprint(split_sort_dir):
+    """The cache key must describe the image that actually comes out."""
+    for sort_by, attr in (("modified", "st_mtime_ns"), ("created", "st_ctime_ns")):
+        out = _execute(split_sort_dir, sort_by=sort_by)
+        chosen = out.args[1]
+        stamp = getattr(os.stat(chosen), attr)
+        key = _fingerprint(
+            directory=str(split_sort_dir), pattern=PATTERN, sort_by=sort_by
+        )
+
+        assert key.startswith(f"{chosen}::{stamp}::")
+
+
+def test_execute_sort_by_honoured_with_fallback_connected(split_sort_dir, fallback):
+    """Same contract on the fallback branch, which picks through history."""
+    first = _execute(split_sort_dir, sort_by="created", fallback_image=fallback)
+    second = _execute(
+        split_sort_dir, sort_by="created", fallback_image=fallback, iter=2
+    )
+
+    assert second.args[1] == str(split_sort_dir / "a.png")
+    assert first.args[1] != second.args[1]
 
 
 # --- fingerprint_inputs --------------------------------------------------

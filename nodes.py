@@ -144,7 +144,9 @@ class LoadMostRecentImage(io.ComfyNode):
                 entry = state.history[user_idx]
             else:
                 entry = state.pick_new_entry(
-                    lambda: pick_latest_image(directory, pattern, recursive == "true"),
+                    lambda: pick_latest_image(
+                        directory, pattern, recursive == "true", sort_by
+                    ),
                     current_sig,
                 )
                 state.append_entry(entry, current_sig)
@@ -159,7 +161,7 @@ class LoadMostRecentImage(io.ComfyNode):
             return io.NodeOutput(*result, ui={"iter": [len(state.history) + 1]})
 
         # `fallback_image is None` here: the branch above returns on every path.
-        picked = pick_latest_image(directory, pattern, recursive == "true")
+        picked = pick_latest_image(directory, pattern, recursive == "true", sort_by)
         if picked is None:
             raise ValueError(
                 f"No image matched {pattern!r} in {directory!r}. "
