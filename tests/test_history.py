@@ -9,7 +9,6 @@ from utils.history import (
     make_state_key,
 )
 
-
 # --- make_state_key ------------------------------------------------------
 
 

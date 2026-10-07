@@ -1,6 +1,9 @@
 import json
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 STATE_DIR = Path(
     os.environ.get("LMRI_STATE_DIR", "/root/.cache/comfyui_load_most_recent_image")
@@ -17,8 +20,8 @@ def load_persistent_state(key):
         if p.exists():
             with p.open("r", encoding="utf-8") as f:
                 return json.load(f)
-    except Exception:
-        pass
+    except (OSError, ValueError, KeyError) as exc:
+        logger.debug("load_persistent_state failed for %s: %s", key, exc)
     return {"history": [], "last_fb_sig": None, "global_counter": 0}
 
 
@@ -30,5 +33,5 @@ def save_persistent_state(key, state):
         with tmp.open("w", encoding="utf-8") as f:
             json.dump(state, f)
         tmp.replace(p)
-    except Exception:
-        pass
+    except (OSError, TypeError, ValueError) as exc:
+        logger.debug("save_persistent_state failed for %s: %s", key, exc)

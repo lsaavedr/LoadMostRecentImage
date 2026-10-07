@@ -1,6 +1,6 @@
 import json
 
-from utils.state import state_path, load_persistent_state, save_persistent_state
+from utils.state import load_persistent_state, save_persistent_state, state_path
 
 
 def test_state_path_uses_state_dir(isolated_state_dir):

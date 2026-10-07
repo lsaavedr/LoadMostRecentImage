@@ -1,5 +1,6 @@
-from .nodes import LoadMostRecentImage
 from comfy_api.latest import ComfyExtension, io
+
+from .nodes import LoadMostRecentImage
 
 
 class LoadMostRecentImageExtension(ComfyExtension):

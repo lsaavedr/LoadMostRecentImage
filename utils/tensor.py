@@ -1,5 +1,6 @@
-import time
 import hashlib
+import time
+
 import torch
 
 
@@ -21,10 +22,10 @@ def tensor_signature(t) -> str:
         )
         h.update(sample)
         return h.hexdigest()
-    except Exception:
+    except (AttributeError, TypeError, ValueError, RuntimeError, KeyError, OSError):
         try:
             return f"id::{id(t)}::{getattr(t, 'shape', '?')}"
-        except Exception:
+        except (AttributeError, TypeError, ValueError, RuntimeError, KeyError, OSError):
             return str(time.time_ns())
 
 

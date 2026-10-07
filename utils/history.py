@@ -1,6 +1,6 @@
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
 
 from .state import load_persistent_state, save_persistent_state
 
@@ -30,8 +30,8 @@ class HistoryState:
     """Persistent history of resolved outputs for one workflow configuration."""
 
     key: str
-    history: List[str] = field(default_factory=list)
-    last_fb_sig: Optional[str] = None
+    history: list[str] = field(default_factory=list)
+    last_fb_sig: str | None = None
     global_counter: int = 0
 
     @classmethod
@@ -68,7 +68,7 @@ class HistoryState:
         return self.global_counter
 
     def pick_new_entry(
-        self, picker: Callable[[], Optional[str]], fallback_sig: str
+        self, picker: Callable[[], str | None], fallback_sig: str
     ) -> str:
         picked = picker()
         if picked is not None:

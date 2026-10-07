@@ -1,17 +1,20 @@
+import logging
 import time
+from pathlib import Path
 
 from comfy_api.latest import io
-from pathlib import Path
 
 from .utils.file import (
     DEFAULT_PATTERN,
     list_images,
-    pick_most_recent,
     load_image_with_metadata,
     pick_latest_image,
+    pick_most_recent,
 )
-from .utils.tensor import tensor_signature, prepare_fallback_tensor
-from .utils.history import HistoryState, make_state_key, is_fallback_marker
+from .utils.history import HistoryState, is_fallback_marker, make_state_key
+from .utils.tensor import prepare_fallback_tensor, tensor_signature
+
+logger = logging.getLogger(__name__)
 
 
 class LoadMostRecentImage(io.ComfyNode):
@@ -93,7 +96,7 @@ class LoadMostRecentImage(io.ComfyNode):
             if not files:
                 try:
                     return f"empty::{dir_path.resolve()}::{dir_path.stat().st_mtime_ns}::rst::{iter}"
-                except Exception:
+                except OSError:
                     return f"empty::{dir_path}::{time.time_ns()}::rst::{iter}"
 
             latest = pick_most_recent(files, sort_by)
@@ -104,6 +107,11 @@ class LoadMostRecentImage(io.ComfyNode):
             )
             return f"{latest}::{ts}::rst::{iter}"
         except Exception:
+            # Deliberately broad: this function must be total. ComfyUI calls it
+            # to decide whether it can reuse a cached result, so the only safe
+            # failure mode is "return a fresh key". Raising would break the
+            # execution loop, not just this node. The log keeps it diagnosable.
+            logger.exception("fingerprint_inputs failed; using a fresh cache key")
             return time.time_ns()
 
     @classmethod

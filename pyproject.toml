@@ -14,7 +14,17 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "ruff>=0.16.10",
 ]
+
+[tool.ruff]
+# Pin the target instead of inheriting `requires-python`: ComfyUI runs on
+# whatever Python the user has, and `ruff format` targets PEP 758
+# (`except A, B:` without parentheses) on 3.14+, which is a SyntaxError
+# earlier and would stop the node from importing at all.
+target-version = "py312"
+lint.ignore = ["N999"]
+
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

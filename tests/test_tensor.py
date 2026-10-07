@@ -3,7 +3,6 @@ import torch
 
 from utils.tensor import prepare_fallback_tensor, tensor_signature
 
-
 # --- tensor_signature: identity ------------------------------------------
 
 

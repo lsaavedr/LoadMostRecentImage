@@ -1,9 +1,9 @@
 import re
 import time
+from pathlib import Path
+
 import numpy as np
 import torch
-from pathlib import Path
-from typing import Optional
 from PIL import Image
 
 # Default regex matches common image extensions (case-insensitive)
@@ -73,7 +73,7 @@ def load_image_with_metadata(path: Path) -> tuple:
     return (tensor, str(path), w, h, mtime_str)
 
 
-def pick_latest_image(directory: str, pattern: str, recursive: bool) -> Optional[str]:
+def pick_latest_image(directory: str, pattern: str, recursive: bool) -> str | None:
     """Find the most recent image path, or None if no images found."""
     dir_path = Path(directory).expanduser()
     files = list_images(dir_path, pattern, recursive)
