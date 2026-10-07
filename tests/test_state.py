@@ -4,7 +4,12 @@ import json
 import pytest
 
 import utils.state as state_mod
-from utils.state import load_persistent_state, save_persistent_state, state_path
+from utils.state import (
+    clear_persistent_states,
+    load_persistent_state,
+    save_persistent_state,
+    state_path,
+)
 
 
 def test_state_path_uses_state_dir(isolated_state_dir):
@@ -80,12 +85,11 @@ def test_load_nonexistent_returns_default(isolated_state_dir):
     assert load_persistent_state("nope") == {
         "history": [],
         "last_fb_sig": None,
-        "global_counter": 0,
     }
 
 
 def test_save_then_load_roundtrip(isolated_state_dir):
-    data = {"history": ["a"], "last_fb_sig": "s", "global_counter": 5}
+    data = {"history": ["a"], "last_fb_sig": "s"}
     save_persistent_state("key", data)
     assert load_persistent_state("key") == data
 
@@ -104,11 +108,9 @@ def test_save_is_atomic_no_tmp_left_behind(isolated_state_dir):
 
 
 def test_save_overwrites_existing(isolated_state_dir):
-    save_persistent_state("key", {"history": ["first"], "global_counter": 1})
-    save_persistent_state("key", {"history": ["second"], "global_counter": 2})
-    loaded = load_persistent_state("key")
-    assert loaded["history"] == ["second"]
-    assert loaded["global_counter"] == 2
+    save_persistent_state("key", {"history": ["first"]})
+    save_persistent_state("key", {"history": ["second"]})
+    assert load_persistent_state("key")["history"] == ["second"]
 
 
 def test_load_corrupt_json_returns_default(isolated_state_dir):
@@ -117,7 +119,6 @@ def test_load_corrupt_json_returns_default(isolated_state_dir):
     assert load_persistent_state("corrupt") == {
         "history": [],
         "last_fb_sig": None,
-        "global_counter": 0,
     }
 
 
@@ -132,7 +133,6 @@ def test_save_swallows_write_errors(isolated_state_dir, monkeypatch):
     assert load_persistent_state("key") == {
         "history": [],
         "last_fb_sig": None,
-        "global_counter": 0,
     }
 
 
@@ -151,13 +151,56 @@ def test_load_swallows_read_errors(isolated_state_dir, monkeypatch):
     assert load_persistent_state("key") == {
         "history": [],
         "last_fb_sig": None,
-        "global_counter": 0,
     }
 
 
 def test_saved_file_is_valid_json(isolated_state_dir):
-    save_persistent_state(
-        "key", {"history": ["a"], "last_fb_sig": None, "global_counter": 1}
-    )
+    save_persistent_state("key", {"history": ["a"], "last_fb_sig": None})
     raw = (isolated_state_dir / "key.json").read_text(encoding="utf-8")
     assert json.loads(raw)["history"] == ["a"]
+
+
+# --- clear_persistent_states ---------------------------------------------
+
+
+def test_clear_persistent_states_deletes_json_files(isolated_state_dir):
+    save_persistent_state("k1", {"history": []})
+    save_persistent_state("k2", {"last_fb_sig": "s2"})
+    assert len(list(isolated_state_dir.glob("*.json"))) == 2
+
+    clear_persistent_states()
+
+    assert list(isolated_state_dir.glob("*.json")) == []
+    assert load_persistent_state("k1") == {"history": [], "last_fb_sig": None}
+
+
+def test_clear_persistent_states_deletes_orphaned_tmp(isolated_state_dir):
+    """A write interrupted mid-dump leaves a staged file that nothing else removes."""
+    save_persistent_state("k1", {"history": ["/a.png"]})
+    staged = state_path("k2").with_suffix(".tmp")
+    staged.write_text('{"history": ["/b.png"')  # truncated by a crash
+
+    clear_persistent_states()
+
+    assert not staged.exists()
+
+
+def test_save_leaves_no_tmp_on_success(isolated_state_dir):
+    save_persistent_state("k1", {"history": ["/a.png"]})
+
+    assert list(isolated_state_dir.glob("*.tmp")) == []
+
+
+def test_clear_persistent_states_ignores_missing_dir():
+    # No-op when the directory doesn't exist yet.
+    with pytest.raises(FileNotFoundError):
+        state_mod.STATE_DIR.unlink()
+    clear_persistent_states()
+
+
+def test_clear_persistent_states_swallows_errors(monkeypatch):
+    def boom(*args, **kwargs):
+        raise OSError("io error")
+
+    monkeypatch.setattr(state_mod.Path, "glob", boom)
+    clear_persistent_states()

@@ -42,14 +42,19 @@ def load_persistent_state(key):
                 return json.load(f)
     except (OSError, ValueError, KeyError) as exc:
         logger.debug("load_persistent_state failed for %s: %s", key, exc)
-    return {"history": [], "last_fb_sig": None, "global_counter": 0}
+    return {"history": [], "last_fb_sig": None}
 
 
 def clear_persistent_states():
-    """Delete every persisted state file (called when the UI reloads)."""
+    """Delete every persisted state file (called when the UI reloads).
+
+    Also sweeps `*.tmp`: `save_persistent_state` stages into one before
+    renaming, so a write interrupted mid-dump leaves a partial file behind.
+    """
     try:
-        for p in STATE_DIR.glob("*.json"):
-            p.unlink(missing_ok=True)
+        for pattern in ("*.json", "*.tmp"):
+            for p in STATE_DIR.glob(pattern):
+                p.unlink(missing_ok=True)
     except OSError as exc:
         logger.debug("clear_persistent_states failed: %s", exc)
 

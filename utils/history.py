@@ -6,12 +6,17 @@ from .state import load_persistent_state, save_persistent_state
 
 
 def make_state_key(directory, pattern, recursive, sort_by) -> str:
-    """Generate a stable hash for a workflow configuration."""
+    """Generate a stable hash for a workflow configuration.
+
+    Each field is length-prefixed so no two distinct configurations can
+    concatenate to the same bytes: ("ab", "c") must not collide with
+    ("a", "bc").
+    """
     h = hashlib.md5()
-    h.update(str(directory).encode())
-    h.update(str(pattern).encode())
-    h.update(str(recursive).encode())
-    h.update(str(sort_by).encode())
+    for part in (directory, pattern, recursive, sort_by):
+        raw = str(part).encode()
+        h.update(f"{len(raw)}:".encode())
+        h.update(raw)
     return h.hexdigest()
 
 
@@ -32,7 +37,6 @@ class HistoryState:
     key: str
     history: list[str] = field(default_factory=list)
     last_fb_sig: str | None = None
-    global_counter: int = 0
 
     @classmethod
     def load(cls, key: str) -> "HistoryState":
@@ -41,7 +45,6 @@ class HistoryState:
             key=key,
             history=raw.get("history", []),
             last_fb_sig=raw.get("last_fb_sig"),
-            global_counter=raw.get("global_counter", 0),
         )
 
     def save(self) -> None:
@@ -50,22 +53,18 @@ class HistoryState:
             {
                 "history": self.history,
                 "last_fb_sig": self.last_fb_sig,
-                "global_counter": self.global_counter,
             },
         )
 
     def reset_for_tensor(self, sig: str) -> None:
         self.history = [make_fallback_marker(sig)]
         self.last_fb_sig = sig
-        self.global_counter = 1
         self.save()
 
-    def append_entry(self, entry: str, sig: str) -> int:
+    def append_entry(self, entry: str, sig: str) -> None:
         self.history.append(entry)
-        self.global_counter = len(self.history)
         self.last_fb_sig = sig
         self.save()
-        return self.global_counter
 
     def pick_new_entry(
         self, picker: Callable[[], str | None], fallback_sig: str
