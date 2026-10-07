@@ -5,9 +5,29 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-STATE_DIR = Path(
-    os.environ.get("LMRI_STATE_DIR", "/root/.cache/comfyui_load_most_recent_image")
-)
+APP_STATE_DIR = "comfyui_load_most_recent_image"
+
+
+def _default_state_dir() -> Path:
+    """Resolve where to persist state, most specific source first.
+
+    1. ``LMRI_STATE_DIR`` -- explicit override for tests and odd setups.
+    2. ``$XDG_STATE_HOME/<app>`` -- the XDG home for data that persists
+       between runs (distinct from ``$XDG_CACHE_HOME``, which is disposable).
+    3. ``~/.local/state/<app>`` -- the XDG default.
+
+    The per-app subdirectory keeps this node from colliding with any other
+    tool that respects the XDG spec.
+    """
+    override = os.environ.get("LMRI_STATE_DIR")
+    if override:
+        return Path(override).expanduser()
+
+    root = os.environ.get("XDG_STATE_HOME") or "~/.local/state"
+    return Path(root).expanduser() / APP_STATE_DIR
+
+
+STATE_DIR = _default_state_dir()
 
 
 def state_path(key):

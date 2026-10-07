@@ -1,5 +1,9 @@
+import importlib
 import json
 
+import pytest
+
+import utils.state as state_mod
 from utils.state import load_persistent_state, save_persistent_state, state_path
 
 
@@ -7,6 +11,69 @@ def test_state_path_uses_state_dir(isolated_state_dir):
     p = state_path("abc")
     assert p.parent == isolated_state_dir
     assert p.name == "abc.json"
+
+
+# --- STATE_DIR resolution ------------------------------------------------
+#
+# Pins the precedence between LMRI_STATE_DIR, XDG_STATE_HOME and the XDG
+# default, plus the guarantee that the resolved path is actually usable.
+
+
+@pytest.fixture()
+def xdg_env(monkeypatch, tmp_path):
+    """Controlled HOME/XDG_STATE_HOME with no override set."""
+    monkeypatch.delenv("LMRI_STATE_DIR", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    return tmp_path
+
+
+def test_state_dir_falls_back_to_xdg_default(xdg_env):
+    importlib.reload(state_mod)
+
+    assert state_mod.STATE_DIR == xdg_env / ".local" / "state" / state_mod.APP_STATE_DIR
+    assert state_mod.STATE_DIR.is_absolute()
+
+
+def test_state_dir_honours_xdg_state_home(tmp_path, monkeypatch):
+    monkeypatch.delenv("LMRI_STATE_DIR", raising=False)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
+    importlib.reload(state_mod)
+
+    assert state_mod.STATE_DIR == tmp_path / "xdg" / state_mod.APP_STATE_DIR
+
+
+def test_state_dir_override_beats_xdg_state_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("LMRI_STATE_DIR", str(tmp_path / "override"))
+    importlib.reload(state_mod)
+
+    assert state_mod.STATE_DIR == tmp_path / "override"
+
+
+def test_state_dir_expands_tilde_in_override(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LMRI_STATE_DIR", "~/custom/state")
+    importlib.reload(state_mod)
+
+    assert state_mod.STATE_DIR == tmp_path / "custom" / "state"
+
+
+def test_state_dir_never_leaves_a_literal_tilde(xdg_env):
+    """`Path("~/x")` is *relative*: without expanduser() it writes to the cwd."""
+    importlib.reload(state_mod)
+
+    assert "~" not in state_mod.STATE_DIR.parts
+
+
+def test_state_dir_default_actually_persists(xdg_env):
+    """End to end: with a real HOME the default path must actually save."""
+    importlib.reload(state_mod)
+
+    save_persistent_state("k", {"history": ["a"]})
+
+    expected = xdg_env / ".local" / "state" / state_mod.APP_STATE_DIR / "k.json"
+    assert expected.exists(), "default STATE_DIR is not writable for this user"
 
 
 def test_load_nonexistent_returns_default(isolated_state_dir):
@@ -56,7 +123,6 @@ def test_load_corrupt_json_returns_default(isolated_state_dir):
 
 def test_save_swallows_write_errors(isolated_state_dir, monkeypatch):
     """A failing write must not raise -- persistence is best-effort."""
-    import utils.state as state_mod
 
     def boom(*args, **kwargs):
         raise OSError("disk full")
@@ -72,8 +138,6 @@ def test_save_swallows_write_errors(isolated_state_dir, monkeypatch):
 
 def test_load_swallows_read_errors(isolated_state_dir, monkeypatch):
     """A corrupt/hostile file must not raise on load either."""
-    import utils.state as state_mod
-
     save_persistent_state("key", {"history": ["a"]})
 
     real_open = state_mod.Path.open
