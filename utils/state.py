@@ -25,6 +25,15 @@ def load_persistent_state(key):
     return {"history": [], "last_fb_sig": None, "global_counter": 0}
 
 
+def clear_persistent_states():
+    """Delete every persisted state file (called when the UI reloads)."""
+    try:
+        for p in STATE_DIR.glob("*.json"):
+            p.unlink(missing_ok=True)
+    except OSError as exc:
+        logger.debug("clear_persistent_states failed: %s", exc)
+
+
 def save_persistent_state(key, state):
     try:
         STATE_DIR.mkdir(parents=True, exist_ok=True)

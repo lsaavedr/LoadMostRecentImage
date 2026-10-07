@@ -31,9 +31,10 @@ export function createExtension(app) {
                             const widget = node.widgets?.find(w => w.name === "iter");
                             if (widget) {
                                 widget.value = newValue;
-                                if (widget.callback) {
-                                    widget.callback(widget.value);
-                                }
+                                // Do NOT fire widget.callback here: it would
+                                // queue another partial execution and the node
+                                // would recurse, with `iter` running upwards from
+                                // whatever state was persisted on disk.
                                 node.setDirtyCanvas(true, true);
                             }
                         }
@@ -65,6 +66,14 @@ export function createExtension(app) {
         },
 
         async afterConfigureGraph() {
+            // A fresh page shows a brand-new session:
+            //  - the widget counter goes back to 0
+            //  - the backend's persisted history is wiped
+            try {
+                await fetch("/load_most_recent_image/clear_history", { method: "POST" });
+            } catch (e) {
+                // No backend available (e.g. unit tests) — ignore.
+            }
             for (const node of app.graph._nodes || []) {
                 if (node.comfyClass !== "LoadMostRecentImage") {
                     continue;

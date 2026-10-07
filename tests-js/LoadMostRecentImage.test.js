@@ -100,14 +100,38 @@ test("onExecuted ignores non-array iter payloads", async () => {
     assert.equal(widget.value, 1);
 });
 
-test("onExecuted notifies the widget callback with the new value", async () => {
+test("onExecuted does not fire the widget callback (it would recurse)", async () => {
     const ext = createExtension(fakeApp());
     const { node, widget } = fakeNode({ widgetValue: 0 });
     await ext.nodeCreated(node);
     const seen = [];
     widget.callback = (v) => seen.push(v);
     node.onExecuted({ iter: [3] });
-    assert.deepEqual(seen, [3]);
+    assert.deepEqual(seen, []);
+});
+
+test("afterConfigureGraph clears persisted history on the backend", async () => {
+    const app = fakeApp();
+    const ext = createExtension(app);
+    const { node, widget } = fakeNode({ widgetValue: 3 });
+    app.graph._nodes = [node];
+
+    const calls = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+        calls.push([url, opts]);
+        return { ok: true, status: 200 };
+    };
+    try {
+        await ext.afterConfigureGraph();
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+
+    assert.deepEqual(calls, [
+        ["/load_most_recent_image/clear_history", { method: "POST" }],
+    ]);
+    assert.equal(widget.value, 0);
 });
 
 test("afterConfigureGraph tolerates a missing node list", async () => {
