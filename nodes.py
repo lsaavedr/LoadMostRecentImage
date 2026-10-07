@@ -52,11 +52,12 @@ class LoadMostRecentImage(io.ComfyNode):
                     min=0,
                     max=1000000,
                     step=1,
-                    tooltip="Index into the fallback_image history. The history grows automatically:\n"
-                    "0 = latest entry (added on each run if the tensor did not change)\n"
-                    "N = Nth entry of the history (0-based)\n"
-                    "If the counter exceeds the history length, a new entry is appended and returned.\n"
-                    "When the fallback_image tensor changes, the history resets and a new run begins.",
+                    tooltip="Position in the fallback_image history, which gains one entry per run.\n"
+                    "The history is append-ordered, so 0 is the oldest entry: the tensor\n"
+                    "as it was when it last changed. An index at or past the end records\n"
+                    "the newest matching image as a new entry. After each run this widget\n"
+                    "is set to the new end, so queueing again appends the next one.\n"
+                    "Changing the fallback_image tensor resets the history.",
                     optional=True,
                 ),
             ],
@@ -137,7 +138,7 @@ class LoadMostRecentImage(io.ComfyNode):
                 result = prepare_fallback_tensor(fallback_image)
 
                 assert result is not None
-                return io.NodeOutput(*result, ui={"iter": [1]})
+                return io.NodeOutput(*result, ui={"iter": [len(state.history) + 1]})
 
             if user_idx < len(state.history):
                 entry = state.history[user_idx]
@@ -146,8 +147,7 @@ class LoadMostRecentImage(io.ComfyNode):
                     lambda: pick_latest_image(directory, pattern, recursive == "true"),
                     current_sig,
                 )
-
-            next_iter = state.append_entry(entry, current_sig)
+                state.append_entry(entry, current_sig)
 
             result = (
                 prepare_fallback_tensor(fallback_image)
@@ -156,16 +156,15 @@ class LoadMostRecentImage(io.ComfyNode):
             )
 
             assert result is not None
-            return io.NodeOutput(*result, ui={"iter": [next_iter]})
+            return io.NodeOutput(*result, ui={"iter": [len(state.history) + 1]})
 
-        state.save()
-
+        # `fallback_image is None` here: the branch above returns on every path.
         picked = pick_latest_image(directory, pattern, recursive == "true")
-        result = (
-            load_image_with_metadata(Path(picked))
-            if picked is not None
-            else prepare_fallback_tensor(fallback_image)
-        )
+        if picked is None:
+            raise ValueError(
+                f"No image matched {pattern!r} in {directory!r}. "
+                "Connect the optional fallback_image input, or loosen the pattern."
+            )
 
-        assert result is not None
-        return io.NodeOutput(*result, ui={"iter": [state.global_counter]})
+        result = load_image_with_metadata(Path(picked))
+        return io.NodeOutput(*result, ui={"iter": [len(state.history) + 1]})
