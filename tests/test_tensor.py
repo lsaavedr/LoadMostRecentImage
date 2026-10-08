@@ -59,11 +59,10 @@ def test_signature_handles_large_tensors():
 
 @pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float8_e4m3fn])
 def test_signature_is_content_based_for_dtypes_numpy_cannot_represent(dtype):
-    """bfloat16 and float8 have no numpy equivalent.
-
-    Widening to float32 keeps the signature content-based. An identity-based
-    fallback would carry a different value on every process, which resets the
-    fallback history whenever ComfyUI restarts.
+    """bfloat16 and float8 have no numpy equivalent, so `.numpy()` raises on
+    them. Narrowing to uint8 keeps the signature content-based. An
+    identity-based fallback would carry a different value on every process,
+    which resets the fallback history whenever ComfyUI restarts.
     """
     a = torch.ones(1, 4, 4, 3).to(dtype)
     b = torch.ones(1, 4, 4, 3).to(dtype)
@@ -71,6 +70,75 @@ def test_signature_is_content_based_for_dtypes_numpy_cannot_represent(dtype):
     assert len(tensor_signature(a)) == 32
     assert tensor_signature(a) == tensor_signature(b)
     assert tensor_signature(a) != tensor_signature(torch.zeros(1, 4, 4, 3).to(dtype))
+
+
+def test_signature_covers_every_element_not_a_sample():
+    """The whole tensor is hashed, so a single-element edit in a large tensor
+    is a different signature. A strided sample would miss it and let a stale
+    history survive an upstream change."""
+    base = torch.zeros(1, 128, 128, 3)
+    edited = base.clone()
+    edited[0, 1, 1, 0] = 1.0
+
+    assert base.numel() > 64  # the edit is well inside what sampling skipped
+    assert tensor_signature(base) != tensor_signature(edited)
+
+
+def test_signature_ignores_tensor_layout():
+    """Content decides the signature, not stride order: a non-contiguous view
+    hashes the same as the contiguous copy of its own pixels, so a view
+    upstream produces does not read as a changed image."""
+    view = torch.rand(1, 8, 8, 6)[..., ::2]
+    assert not view.is_contiguous()
+
+    assert tensor_signature(view) == tensor_signature(view.contiguous())
+
+
+def test_signature_sees_content_that_transposing_reorders():
+    """Layout-independence is not layout-blindness: a transpose really does
+    move pixels, and the signature has to notice."""
+    base = torch.rand(1, 8, 8, 3)
+
+    assert tensor_signature(base) != tensor_signature(base.transpose(1, 2))
+
+
+def test_signature_separates_images_that_differ_below_1_0():
+    """IMAGE tensors hold floats in [0, 1). Narrowing them without scaling by
+    255 truncates every value to zero, which would give every image the same
+    signature regardless of content."""
+    dark = torch.full((1, 4, 4, 3), 0.1)
+    mid = torch.full((1, 4, 4, 3), 0.6)
+
+    assert tensor_signature(dark) != tensor_signature(mid)
+
+
+@pytest.mark.parametrize(
+    "value", [float("nan"), float("inf"), float("-inf"), -1.0, 5.0]
+)
+def test_signature_is_deterministic_for_out_of_range_values(value):
+    """Values outside [0, 1] wrap rather than saturate when narrowed, and
+    non-finite values become zero. None of that matters for hashing as long as
+    the choice is stable: an unstable one would reset the history every run."""
+    t = torch.full((1, 2, 2, 3), value)
+
+    assert tensor_signature(t) == tensor_signature(t)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_values_read_as_black(value):
+    """Non-finite values belong in no image and narrow to zero, so they collide
+    with a black tensor. Recorded because it is the one way a genuine content
+    change goes unnoticed."""
+    assert tensor_signature(torch.full((1, 2, 2, 3), value)) == tensor_signature(
+        torch.zeros(1, 2, 2, 3)
+    )
+
+
+@pytest.mark.parametrize("value", [-1.0, 0.5, 1.0, 5.0])
+def test_out_of_range_values_stay_distinguishable_from_black(value):
+    assert tensor_signature(torch.full((1, 2, 2, 3), value)) != tensor_signature(
+        torch.zeros(1, 2, 2, 3)
+    )
 
 
 def test_signature_distinguishes_bfloat16_from_its_float32_widening():

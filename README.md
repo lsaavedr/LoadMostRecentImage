@@ -145,11 +145,13 @@ History entries are either:
 
 Only paths are stored, never tensors or pixel data.
 
-The tensor signature is a hash of shape, dtype and a strided sample of the
-tensor, so it is stable across processes and across freshly allocated tensors
-with unchanged content. bfloat16 and the float8 family have no numpy
-equivalent and are widened to float32 before hashing; the original dtype is
-still part of the hash, so a widened bfloat16 cannot collide with a float32.
+The tensor signature is a hash of shape, dtype and the whole tensor narrowed to
+one byte per element, so it is stable across processes and across freshly
+allocated tensors with unchanged content. Narrowing to uint8 reads every
+element at a quarter of the bytes a float32 copy would move, and it is the one
+representation every dtype can reach: bfloat16 and the float8 family have no
+numpy equivalent, so `.numpy()` raises on them. The original dtype is still
+part of the hash, so a narrowed bfloat16 cannot collide with a float32.
 
 ## `sort_by`
 

@@ -4,29 +4,42 @@ import time
 import torch
 
 
-def _sample_bytes(t) -> bytes:
-    """Raw bytes of a strided sample, for dtypes numpy cannot represent.
+def _content_bytes(t) -> bytes:
+    """Every element of the tensor, one byte each.
 
-    bfloat16 and the float8 family have no numpy equivalent, so `.numpy()`
-    raises. Widening to float32 keeps the signature content-based and stable
-    across processes, which an identity-based fallback would not be.
+    Narrowing reads every element at a quarter of the bytes a float32 copy
+    moves, and it is also the representation every dtype can reach: bfloat16
+    and the float8 family have no numpy equivalent, so `.numpy()` raises on
+    them. Hashing those bytes keeps the signature content-based and identical
+    across devices and torch versions, which an identity-based fallback would
+    not be.
+
+    IMAGE tensors live in [0, 1], so the values are scaled by 255 first.
+    `.to(torch.uint8)` truncates rather than scales, and without the scaling a
+    whole float image collapses onto a single value.
+
+    `float()` comes first and is a no-op for the float32 tensors ComfyUI
+    hands over. For the narrower dtypes it is what makes `mul` available at
+    all: the float8 family has no `mul` kernel on CPU.
     """
-    try:
-        return t.numpy().tobytes()
-    except (TypeError, NotImplementedError):
-        return t.to(torch.float32).numpy().tobytes()
+    scaled = t.detach().contiguous().float().mul(255.0)
+    return scaled.to(torch.uint8).cpu().numpy().tobytes()
 
 
 def tensor_signature(t) -> str:
-    """Stable identifier for a fallback IMAGE tensor (changes when the tensor changes)."""
+    """Stable identifier for a fallback IMAGE tensor.
+
+    Hashes shape, dtype and the full content. Two tensors differ unless every
+    element is equal to within a single 8-bit step, so a one-element edit is
+    still a different signature.
+    """
     try:
         if not isinstance(t, torch.Tensor):
             return f"id::{id(t)}"
         h = hashlib.md5()
         h.update(str(tuple(t.shape)).encode())
         h.update(str(t.dtype).encode())
-        sample = t.detach().contiguous().flatten()[:: max(1, t.numel() // 64)].cpu()
-        h.update(_sample_bytes(sample))
+        h.update(_content_bytes(t))
         return h.hexdigest()
     except (AttributeError, TypeError, ValueError, RuntimeError, KeyError, OSError):
         try:
