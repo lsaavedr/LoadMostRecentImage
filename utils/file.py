@@ -32,6 +32,15 @@ def list_images(directory: Path, pattern: str, recursive: bool):
 
 
 def pick_most_recent(files, by: str):
+    """Newest file by mtime or ctime, with ties broken on the path.
+
+    The tiebreak is what makes the choice survive a restart. `max` keeps the
+    first element it meets when keys are equal, both callers hand it a set, and
+    a set of Path iterates in `hash(str)` order -- which Python randomises per
+    process. Without the path, files written together (an `rsync -t`, a `git
+    checkout` of images, or any filesystem with coarse timestamps) would make
+    the node return a different image on every launch.
+    """
     if not files:
         raise ValueError("No image files found that match your pattern.")
 
@@ -40,7 +49,10 @@ def pick_most_recent(files, by: str):
 
     return max(
         files,
-        key=lambda p: p.stat().st_mtime if by == "modified" else p.stat().st_ctime,
+        key=lambda p: (
+            p.stat().st_mtime if by == "modified" else p.stat().st_ctime,
+            str(p),
+        ),
     )
 
 

@@ -1,3 +1,4 @@
+import os
 import time
 from pathlib import Path
 
@@ -116,6 +117,38 @@ def test_pick_most_recent_by_created(tmp_path):
     second.write_bytes(b"x")
 
     assert pick_most_recent([first, second], "created") == second
+
+
+def test_pick_most_recent_breaks_ties_on_path(tmp_path):
+    """Identical timestamps must resolve the same way on every launch.
+
+    Both callers pass a set, and a set of Path iterates in hash(str) order,
+    which Python randomises per process. Before the tiebreak this returned a
+    different file on each start.
+    """
+    made = []
+    for name in ("a.png", "b.png", "c.png"):
+        p = tmp_path / name
+        p.write_bytes(b"x")
+        os.utime(p, (1_700_000_000, 1_700_000_000))
+        made.append(p)
+
+    assert pick_most_recent(set(made), "modified") == tmp_path / "c.png"
+    assert pick_most_recent(made, "modified") == tmp_path / "c.png"
+    assert pick_most_recent(list(reversed(made)), "modified") == tmp_path / "c.png"
+
+
+def test_pick_most_recent_prefers_newer_mtime_over_path(tmp_path):
+    """The path only breaks ties. `z.png` sorts last by name, so if it won
+    here the tiebreak would be the primary key."""
+    earlier = tmp_path / "z.png"
+    later = tmp_path / "a.png"
+    earlier.write_bytes(b"x")
+    later.write_bytes(b"x")
+    os.utime(earlier, (1_000, 1_000))
+    os.utime(later, (2_000, 2_000))
+
+    assert pick_most_recent([earlier, later], "modified") == later
 
 
 def test_pick_most_recent_empty_raises():
