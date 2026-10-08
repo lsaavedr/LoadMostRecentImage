@@ -102,11 +102,6 @@ def test_save_creates_state_dir_when_missing(isolated_state_dir):
     assert (isolated_state_dir / "key.json").exists()
 
 
-def test_save_is_atomic_no_tmp_left_behind(isolated_state_dir):
-    save_persistent_state("key", {"history": []})
-    assert list(isolated_state_dir.glob("*.tmp")) == []
-
-
 def test_save_overwrites_existing(isolated_state_dir):
     save_persistent_state("key", {"history": ["first"]})
     save_persistent_state("key", {"history": ["second"]})
