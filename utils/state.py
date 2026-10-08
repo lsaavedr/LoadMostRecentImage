@@ -41,7 +41,7 @@ def load_persistent_state(key):
             with p.open("r", encoding="utf-8") as f:
                 return json.load(f)
     except (OSError, ValueError, KeyError) as exc:
-        logger.debug("load_persistent_state failed for %s: %s", key, exc)
+        logger.warning("load_persistent_state failed for %s: %s", key, exc)
     return {"history": [], "last_fb_sig": None}
 
 
@@ -56,7 +56,7 @@ def clear_persistent_states():
             for p in STATE_DIR.glob(pattern):
                 p.unlink(missing_ok=True)
     except OSError as exc:
-        logger.debug("clear_persistent_states failed: %s", exc)
+        logger.warning("clear_persistent_states failed: %s", exc)
 
 
 def save_persistent_state(key, state):
@@ -68,4 +68,4 @@ def save_persistent_state(key, state):
             json.dump(state, f)
         tmp.replace(p)
     except (OSError, TypeError, ValueError) as exc:
-        logger.debug("save_persistent_state failed for %s: %s", key, exc)
+        logger.warning("save_persistent_state failed for %s: %s", key, exc)

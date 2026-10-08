@@ -122,22 +122,29 @@ def test_load_corrupt_json_returns_default(isolated_state_dir):
     }
 
 
-def test_save_swallows_write_errors(isolated_state_dir, monkeypatch):
-    """A failing write must not raise -- persistence is best-effort."""
+def test_save_swallows_write_errors(isolated_state_dir, monkeypatch, caplog):
+    """A failing write must not raise -- persistence is best-effort.
+
+    But "best-effort" may not mean "silent": a full disk or a state directory
+    that lost its permissions leaves the user with a history that quietly stops
+    persisting, which is worth a warning.
+    """
 
     def boom(*args, **kwargs):
         raise OSError("disk full")
 
     monkeypatch.setattr(state_mod.Path, "mkdir", boom)
-    save_persistent_state("key", {"history": ["a"]})
+    with caplog.at_level("WARNING"):
+        save_persistent_state("key", {"history": ["a"]})
     assert load_persistent_state("key") == {
         "history": [],
         "last_fb_sig": None,
     }
+    assert "save_persistent_state failed" in caplog.text
 
 
-def test_load_swallows_read_errors(isolated_state_dir, monkeypatch):
-    """A corrupt/hostile file must not raise on load either."""
+def test_load_swallows_read_errors(isolated_state_dir, monkeypatch, caplog):
+    """A corrupt/hostile file must not raise on load either, and must say so."""
     save_persistent_state("key", {"history": ["a"]})
 
     real_open = state_mod.Path.open
@@ -148,10 +155,12 @@ def test_load_swallows_read_errors(isolated_state_dir, monkeypatch):
         return real_open(self, *args, **kwargs)
 
     monkeypatch.setattr(state_mod.Path, "open", flaky)
-    assert load_persistent_state("key") == {
-        "history": [],
-        "last_fb_sig": None,
-    }
+    with caplog.at_level("WARNING"):
+        assert load_persistent_state("key") == {
+            "history": [],
+            "last_fb_sig": None,
+        }
+    assert "load_persistent_state failed" in caplog.text
 
 
 def test_saved_file_is_valid_json(isolated_state_dir):
@@ -198,9 +207,15 @@ def test_clear_persistent_states_ignores_missing_dir():
     clear_persistent_states()
 
 
-def test_clear_persistent_states_swallows_errors(monkeypatch):
+def test_clear_persistent_states_swallows_errors(monkeypatch, caplog):
+    """This runs on every graph reload, so a failure is worth saying out loud:
+    otherwise the user reloads, sees an empty history, and has no idea the
+    reset never landed."""
+
     def boom(*args, **kwargs):
         raise OSError("io error")
 
     monkeypatch.setattr(state_mod.Path, "glob", boom)
-    clear_persistent_states()
+    with caplog.at_level("WARNING"):
+        clear_persistent_states()
+    assert "clear_persistent_states failed" in caplog.text
