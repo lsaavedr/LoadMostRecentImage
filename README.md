@@ -215,9 +215,14 @@ the package outside ComfyUI does not fail.
 `.github/workflows/tests.yml` runs on push and pull requests to `master`, and
 on manual dispatch:
 
-- **`test`** — matrixed over Python 3.12 and 3.14: `uv sync --locked`, ruff,
+- **`Python 3.12` / `Python 3.14`** — matrixed legs: `uv sync --locked`, ruff,
   then pytest with the coverage gate
-- **`web`** — Node 24: `npm ci`, `npm run format:check`, then `npm test`
+- **`Web extension`** — Node 24: `npm ci`, `npm run format:check`, then `npm test`
+
+Both run on `ubuntu-26.04`, pinned rather than `ubuntu-latest` so the image
+change is a commit instead of a surprise. A run is titled with its HEAD commit
+message, so pushing several commits at once produces one run named after the
+last of them.
 
 ## Example Use Cases
 
