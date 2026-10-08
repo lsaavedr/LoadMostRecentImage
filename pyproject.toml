@@ -4,6 +4,8 @@ version = "0.2.0"
 description = "ComfyUI node that loads the newest image from a folder, with an optional fallback tensor and a persistent per-configuration history of resolved outputs"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "aiohttp>=3.13",
     "numpy>=2.5.3",

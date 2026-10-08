@@ -262,3 +262,7 @@ last of them.
 - Chain multiple: load most recent → apply variation → save → repeat.
 - Step backward through your iteration history while continuing to advance with
   the same upstream tensor.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

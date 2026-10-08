@@ -1,5 +1,22 @@
-__pycache__
-.coverage
+# Entornos y herramientas
+.venv/
 .python-version
-coverage/
+
+# Instalación de Node
 node_modules/
+
+# Artefactos de test y cobertura
+.coverage
+coverage/
+.pytest_cache/
+.ruff_cache/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editores y SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
