@@ -70,21 +70,26 @@ LoadMostRecentImage/
 
 ## Dependencies
 
-- **Runtime**: `aiohttp`, `numpy`, `pillow`, `torch` (the last three ship with ComfyUI)
+- **Runtime**: `aiohttp`, `numpy`, `pillow`, `torch` — all four ship with
+  ComfyUI. Note that this package asks for a higher `aiohttp` floor than
+  ComfyUI itself does, so installing it onto an older environment can pull in
+  an `aiohttp` upgrade for the server.
 - **Dev**: `pytest`, `pytest-cov`, `ruff`
 - **Web**: `prettier`, for `npm run format:check`
 
 ## Running Tests
 
 ```bash
-uv run pytest      # 154 tests
-npm test           # 24 tests, with 100% coverage enforced
+uv run pytest      # 184 tests
+npm test           # 29 tests, with 100% coverage enforced
 npm run format:check
 ```
 
-Both suites enforce 100% line, branch and function coverage of the plugin's own
-source, and fail if it drops. The Python suite runs in an isolated state
-directory; the JS suite stubs ComfyUI's `app` and `graph`.
+Both suites fail if coverage of the plugin's own source drops below 100%. The
+JS suite enforces lines, branches and functions separately; `coverage.py` has no
+function metric, so on the Python side that is statements and branches. The
+Python suite runs in an isolated state directory; the JS suite stubs ComfyUI's
+`app` and `graph`.
 
 Coverage is measured over `nodes.py`, `__init__.py` and `utils/` — not just
 `utils/`, because the node modules load under the `LoadMostRecentImage.*`
@@ -184,9 +189,10 @@ invalidating the cache to produce the same result.
 
 ## State Location
 
-State lives in a per-node JSON file, one per workflow configuration, named by
-an md5 of `directory + pattern + recursive + sort_by`. The directory is
-resolved in this order:
+State lives in one JSON file per configuration, so two nodes configured
+identically share a file, and two workflows pointing at the same folder share
+one too. The name is an md5 of `directory + pattern + recursive + sort_by`. The
+directory is resolved in this order:
 
 1. `$LMRI_STATE_DIR`, if set
 2. `$XDG_STATE_HOME/comfyui_load_most_recent_image/`
@@ -196,8 +202,11 @@ resolved in this order:
 export LMRI_STATE_DIR=/path/to/custom/state/dir
 ```
 
-There is one file per configuration and nothing prunes them; reloading the
-workflow clears all of them, which is why they do not accumulate in practice.
+Nothing prunes these files, so they do accumulate: one per distinct
+configuration you have used. A history of 100 entries is roughly 5 KB, and a
+thousand is 45 KB. Loading a workflow clears only the configurations that
+workflow uses, so a file for a configuration you have stopped using stays on
+disk until some workflow that uses it is loaded again.
 
 ## History Is Cleared on Workflow Reload
 
@@ -212,14 +221,12 @@ work you had done in it — so switching workflows back and forth costs you the
 history of the one you return to. The keys are computed server-side with the
 same function `execute` uses, so the file cleared is the file the node wrote.
 
-`iter` resets to 1 either way, so if a clear fails the widget can disagree with
-what is on disk; that is why the route reports the outcome.
-
 The route answers `500` with `{"status": "error"}` if the sweep did not
 finish — a read-only state directory, for instance — and the frontend warns in
 the browser console, because `fetch` does not throw on an HTTP error status.
-The widget still resets to `1` either way, so after a failed clear the history
-on disk is older than the widget suggests and the next run appends to it.
+The widget resets to 1 regardless of the outcome, so after a failed clear it
+advertises a fresh session while the previous history is still on disk, and the
+next run appends to it.
 
 The route is a no-op if ComfyUI's `PromptServer` is not present, so importing
 the package outside ComfyUI does not fail. Nothing retries the registration,
