@@ -1,5 +1,7 @@
 # Load Most Recent Image for ComfyUI
 
+![Lint, format and tests](https://github.com/lsaavedr/LoadMostRecentImage/actions/workflows/tests.yml/badge.svg)
+
 Loads the **newest image** from a specified folder, with optional fallback
 handling.
 

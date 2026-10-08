@@ -1,4 +1,4 @@
-name: Tests
+name: Lint, format and tests
 
 on:
   push:
@@ -8,7 +8,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  python:
+    # Named after the interpreter rather than left as `test (3.12)`, so the
+    # matrix legs are readable in the run list without opening the run.
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-26.04
 
     strategy:
@@ -25,7 +28,8 @@ jobs:
       UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
@@ -45,13 +49,15 @@ jobs:
         run: uv run pytest
 
   web:
+    name: Web extension
     runs-on: ubuntu-26.04
 
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "24"
           cache: npm
