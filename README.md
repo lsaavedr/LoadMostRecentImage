@@ -1,8 +1,10 @@
 # Load Most Recent Image for ComfyUI
 
-Loads the **newest image** (by modified or created timestamp) from a specified folder, with optional fallback handling.
+Loads the **newest image** from a specified folder, with optional fallback
+handling.
 
-It also tracks a **persistent history of resolved outputs** (paths only) per workflow configuration, indexed by an `iter` widget that auto-increments with every run.
+It also keeps a **persistent history of resolved outputs** (paths only) per
+workflow configuration, which the `iter` widget advances through.
 
 Ideal for:
 
@@ -18,53 +20,73 @@ Ideal for:
 1. Copy the `LoadMostRecentImage/` folder into your `ComfyUI/custom_nodes/` directory.
 2. Restart ComfyUI or reload custom nodes.
 
-### Development (with `uv`)
+Nothing to install by hand: `aiohttp`, `numpy`, `pillow` and `torch` are all
+already in ComfyUI's requirements.
+
+### Development
+
+Requires Python 3.12 or newer (the floor is set by `numpy`), and `uv`.
 
 ```bash
 git clone <repo-url>
 cd LoadMostRecentImage
-uv sync --group dev
+uv sync --locked
 ```
 
 ## Project Structure
 
 ```
 LoadMostRecentImage/
-├── __init__.py                  # Entry point: registers the ComfyUI extension
+├── __init__.py                  # Entry point: registers the extension and its routes
 ├── nodes.py                     # Node implementation (LoadMostRecentImage class)
 ├── utils/
 │   ├── file.py                  # Image discovery, loading, and tensor conversion
 │   ├── history.py               # Persistent history state management
 │   ├── state.py                 # JSON state persistence (atomic writes)
 │   └── tensor.py                # Tensor signature and fallback preparation
-├── tests/
+├── web/node/
+│   ├── LoadMostRecentImage.js           # Registers the extension with ComfyUI
+│   └── LoadMostRecentImage.extension.js # The extension itself (widget sync, history reset)
+├── tests/                       # Python suite; a package, so it imports the plugin
+│   │                             as `LoadMostRecentImage.*`, the way ComfyUI does
 │   ├── conftest.py              # Fixtures (isolated state dir per test)
-│   ├── stubs/comfy_api/         # Stub for comfy_api (not on PyPI)
+│   ├── stubs/                   # Stubs for comfy_api and server (neither on PyPI)
+│   ├── test_extension_init.py   # Entrypoint, route registration
 │   ├── test_file.py
 │   ├── test_history.py
+│   ├── test_nodes.py            # execute(), fingerprint_inputs(), define_schema()
+│   ├── test_python_compat.py    # Parses every source against the minimum Python
 │   ├── test_state.py
 │   └── test_tensor.py
-├── web/
-│   └── node/
-│       └── LoadMostRecentImage.js  # Frontend extension for iter widget
-├── pyproject.toml               # Project metadata and dependencies
-├── uv.lock                      # Locked dependency versions
-└── .github/workflows/
-    └── tests.yml                # CI: runs pytest on push/PR
+├── tests-js/                    # Web extension suite (node:test)
+├── .github/workflows/tests.yml  # CI
+├── .prettierrc                  # Formatting rules for the JS
+├── package.json                 # npm scripts: test, format, format:check
+├── pyproject.toml               # Metadata, dependencies, ruff/coverage/pytest config
+└── uv.lock                      # Locked dependency versions
 ```
 
 ## Dependencies
 
-- **Runtime**: `numpy`, `pillow`, `torch` (all included with ComfyUI)
-- **Dev**: `pytest`, `pytest-cov`
+- **Runtime**: `aiohttp`, `numpy`, `pillow`, `torch` (the last three ship with ComfyUI)
+- **Dev**: `pytest`, `pytest-cov`, `ruff`
+- **Web**: `prettier`, for `npm run format:check`
 
 ## Running Tests
 
 ```bash
-uv run pytest
+uv run pytest      # 154 tests
+npm test           # 24 tests, with 100% coverage enforced
+npm run format:check
 ```
 
-The test suite includes 102 tests covering file discovery, history management, state persistence, and tensor handling. Tests run in isolation with a temporary state directory.
+Both suites enforce 100% line, branch and function coverage of the plugin's own
+source, and fail if it drops. The Python suite runs in an isolated state
+directory; the JS suite stubs ComfyUI's `app` and `graph`.
+
+Coverage is measured over `nodes.py`, `__init__.py` and `utils/` — not just
+`utils/`, because the node modules load under the `LoadMostRecentImage.*`
+package name and would otherwise go unmeasured.
 
 ## Inputs
 
@@ -73,9 +95,9 @@ The test suite includes 102 tests covering file discovery, history management, s
 | `directory` | `STRING` (required) | Folder to scan (absolute or relative, supports `~`). |
 | `pattern` | `STRING` (optional) | Regex filter for filenames. Default: common image extensions. |
 | `recursive` | `true`/`false` | Scan subfolders (default `false`). |
-| `sort_by` | `modified`/`created` | Use modified or creation time (default `modified`). |
+| `sort_by` | `modified`/`created` | Which timestamp decides "newest" (default `modified`). See below. |
 | `fallback_image` | `IMAGE` (optional) | Direct image tensor fallback. Triggers history tracking when connected. |
-| `iter` | `INT` (optional) | Index into the output history. Auto-increments each run. |
+| `iter` | `INT` (optional) | Position in the output history. Starts at 1. |
 
 ## Outputs
 
@@ -89,59 +111,113 @@ The test suite includes 102 tests covering file discovery, history management, s
 
 ## Fallback Chain
 
-When the configured directory is empty:
+When the configured directory holds no matching image:
 
 1. **`fallback_image`** (if connected): return this tensor.
-2. Otherwise, raise an error.
+2. Otherwise, raise a `ValueError` naming the pattern and directory.
 
 ## Output History and `iter`
 
-When `fallback_image` is connected, the node keeps a **persistent history of resolved outputs** for the current workflow configuration (directory + pattern + recursive + sort_by). Each run appends one entry and `iter` auto-increments to `len(history)`.
+When `fallback_image` is connected, the node keeps a **persistent history of
+resolved outputs** for the current workflow configuration (directory + pattern
++ recursive + sort_by). Each run appends one entry.
 
-State is stored at `/root/.cache/comfyui_load_most_recent_image/<key>.json`, where `<key>` is an md5 hash of the configuration. Only paths are stored, never tensors or pixel data.
+The history is **append-ordered**, so `iter` 0 is the *oldest* entry: the
+`fallback_image` tensor as it was when it last changed. The widget **starts at
+1**, just past that entry, so the counts below run upward without a jump.
 
-History entries can be:
+| Event | `iter` becomes | history |
+|---|---|---|
+| starts at | 1 | — |
+| First run with a new tensor | 2 | `[fallback::<sig>]` |
+| Next run, same tensor | 3 | `[fallback::<sig>, /path/img.png]` |
+| `iter` dragged back to 0 | 3 | unchanged — the entry is replayed, not appended |
+| `fallback_image` changes | 2 | `[fallback::<new_sig>]` |
 
-- `fallback::<tensor_signature>` — the current `fallback_image` input tensor.
-- `/abs/path/to/file.png` — an image file picked from the directory.
+After each run the node writes `len(history) + 1` back to the widget, so
+queueing again records the next entry. Dragging `iter` back replays an older
+entry without growing the history; the widget returns to the end afterwards.
 
-### Behavior
+History entries are either:
 
-- **First run with a new tensor**: `iter` becomes `1`, history starts with `[fallback::<tensor_signature>]`.
-- **Subsequent runs with the same tensor**: `iter` auto-increments by 1, history grows with each resolved output.
-- **Tensor changes**: history resets to `[fallback::<new_tensor_signature>]`, counter becomes `1`.
-- **Manual override**: you can drag `iter` down to look back at a previous entry. On the next run, the widget will auto-increment again to the latest position.
+- `fallback::<tensor_signature>` — the current `fallback_image` tensor
+- `/abs/path/to/file.png` — an image picked from the directory
 
-The frontend extension `web/node/LoadMostRecentImage.js` updates the widget value automatically after each execution, and uses ComfyUI's partial execution API to re-run only this node (not the whole workflow) when `iter` is changed manually — so the connected `PreviewImage` (or any downstream node) updates live without re-running the full pipeline.
+Only paths are stored, never tensors or pixel data.
 
-If the widget doesn't update visually in your frontend, the backend behavior is still correct (check `[LMR]` lines in the ComfyUI logs).
+The tensor signature is a hash of shape, dtype and a strided sample of the
+tensor, so it is stable across processes and across freshly allocated tensors
+with unchanged content. bfloat16 and the float8 family have no numpy
+equivalent and are widened to float32 before hashing; the original dtype is
+still part of the hash, so a widened bfloat16 cannot collide with a float32.
+
+## `sort_by`
+
+`modified` uses `st_mtime`. `created` uses `st_ctime`.
+
+On Linux, `st_ctime` is **not** a creation time: it is the inode change time,
+which moves when a file is renamed, chmod'd, or hard-linked. A true birth time
+would need `statx`, which this node does not use. If you want "the image I
+just generated", leave this on `modified`.
 
 ## Caching
 
-`IS_CHANGED` returns a unique value whenever the directory contents, fallback path, fallback image signature, or counter change. When `fallback_image` is connected, it always returns a timestamped value to ensure re-execution on every run.
+`fingerprint_inputs` (ComfyUI's input-cache hook) keys on the newest matching
+file and its timestamp, or on the `fallback_image` signature plus `iter`.
+While a `fallback_image` is connected it also folds in a timestamp, so the node
+re-executes on every queue rather than being served from cache.
+
+The key always describes the image the node actually returns — switching
+`sort_by` re-runs the node and changes which file is picked, rather than
+invalidating the cache to produce the same result.
 
 ## State Location
 
-The persistent state JSON files live at:
+State lives in a per-node JSON file, one per workflow configuration, named by
+an md5 of `directory + pattern + recursive + sort_by`. The directory is
+resolved in this order:
 
-```
-/root/.cache/comfyui_load_most_recent_image/
-```
-
-You can override this by setting the `LMRI_STATE_DIR` environment variable:
+1. `$LMRI_STATE_DIR`, if set
+2. `$XDG_STATE_HOME/comfyui_load_most_recent_image/`
+3. `~/.local/state/comfyui_load_most_recent_image/`
 
 ```bash
 export LMRI_STATE_DIR=/path/to/custom/state/dir
 ```
 
-Delete the directory to clear all histories.
+There is one file per configuration and nothing prunes them; reloading the
+workflow clears all of them, which is why they do not accumulate in practice.
 
-## CI/CD
+## History Is Cleared on Workflow Reload
 
-The project uses GitHub Actions to run the test suite on every push and pull request to `main`. See `.github/workflows/tests.yml`.
+Loading a workflow is a new session, so the frontend posts to
+`/load_most_recent_image/clear_history`, which deletes every persisted state
+file and resets `iter` to 1. A node whose history you want to survive needs the
+workflow to stay open.
+
+The route is a no-op if ComfyUI's `PromptServer` is not present, so importing
+the package outside ComfyUI does not fail.
+
+## Known Limitations
+
+- History entries are absolute paths and are not pruned. If an image is deleted
+  and you drag `iter` onto that entry, the node raises `FileNotFoundError`.
+- `created` means inode-change time on Linux, not creation time.
+- `fingerprint_inputs` falls back to a timestamp on any error, so an
+  unreadable directory re-runs the node rather than failing.
+
+## CI
+
+`.github/workflows/tests.yml` runs on push and pull requests to `master`, and
+on manual dispatch:
+
+- **`test`** — matrixed over Python 3.12 and 3.14: `uv sync --locked`, ruff,
+  then pytest with the coverage gate
+- **`web`** — Node 24: `npm ci`, `npm run format:check`, then `npm test`
 
 ## Example Use Cases
 
 - Connect to an Upscale or Inpaint node → instantly process your latest output.
 - Chain multiple: load most recent → apply variation → save → repeat.
-- Step backward through your iteration history while continuing to advance with the same upstream tensor.
+- Step backward through your iteration history while continuing to advance with
+  the same upstream tensor.
