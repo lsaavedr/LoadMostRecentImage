@@ -1,9 +1,13 @@
+import logging
+
 import server
 from aiohttp import web
 from comfy_api.latest import ComfyExtension, io
 
 from .nodes import LoadMostRecentImage
 from .utils.state import clear_persistent_states
+
+logger = logging.getLogger(__name__)
 
 
 class LoadMostRecentImageExtension(ComfyExtension):
@@ -19,6 +23,12 @@ async def comfy_entrypoint() -> LoadMostRecentImageExtension:
 def _register_routes() -> None:
     instance = getattr(server.PromptServer, "instance", None)
     if instance is None:
+        # Nothing retries this, so the route would be missing for the rest of
+        # the process and every graph load would 404 without a word about why.
+        logger.warning(
+            "PromptServer.instance is not available, so "
+            "/load_most_recent_image/clear_history is not registered"
+        )
         return
 
     routes = instance.routes

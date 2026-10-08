@@ -23,13 +23,17 @@ def test_extension_advertises_the_node():
     assert nodes == [LoadMostRecentImage]
 
 
-def test_comfy_entrypoint_tolerates_missing_prompt_server(monkeypatch):
+def test_comfy_entrypoint_tolerates_missing_prompt_server(monkeypatch, caplog):
     """Standalone imports (no ComfyUI server) must not break the entrypoint."""
     monkeypatch.setattr(server.PromptServer, "instance", None)
 
-    extension = asyncio.run(comfy_entrypoint())
+    with caplog.at_level("WARNING"):
+        extension = asyncio.run(comfy_entrypoint())
 
     assert isinstance(extension, LoadMostRecentImageExtension)
+    # Nothing retries the registration, so staying quiet here would leave the
+    # frontend on a 404 for the whole session with no explanation anywhere.
+    assert "clear_history is not registered" in caplog.text
 
 
 def test_clear_history_route_deletes_state(monkeypatch, tmp_path):
