@@ -97,24 +97,24 @@ package name and would otherwise go unmeasured.
 
 ## Inputs
 
-| Name | Type | Description |
-|------|------|-------------|
-| `directory` | `STRING` (required) | Folder to scan (absolute or relative, supports `~`). |
-| `pattern` | `STRING` (optional) | Regex filter for filenames. Default: common image extensions. |
-| `recursive` | `true`/`false` | Scan subfolders (default `false`). |
-| `sort_by` | `modified`/`created` | Which timestamp decides "newest" (default `modified`). See below. |
-| `fallback_image` | `IMAGE` (optional) | Direct image tensor fallback. Triggers history tracking when connected. |
-| `iter` | `INT` (optional) | Position in the output history. Starts at 1. |
+| Name             | Type                 | Description                                                             |
+| ---------------- | -------------------- | ----------------------------------------------------------------------- |
+| `directory`      | `STRING` (required)  | Folder to scan (absolute or relative, supports `~`).                    |
+| `pattern`        | `STRING` (optional)  | Regex filter for filenames. Default: common image extensions.           |
+| `recursive`      | `true`/`false`       | Scan subfolders (default `false`).                                      |
+| `sort_by`        | `modified`/`created` | Which timestamp decides "newest" (default `modified`). See below.       |
+| `fallback_image` | `IMAGE` (optional)   | Direct image tensor fallback. Triggers history tracking when connected. |
+| `iter`           | `INT` (optional)     | Position in the output history. Starts at 1.                            |
 
 ## Outputs
 
-| Name | Type | Description |
-|------|------|-------------|
-| `image` | `IMAGE` | The loaded image as a standard ComfyUI tensor. |
-| `path` | `STRING` | Full path of the loaded file, or `fallback:image_input` for tensor fallback. |
-| `width` | `INT` | Image width. |
-| `height` | `INT` | Image height. |
-| `mtime` | `STRING` | Human-readable modified timestamp, or `N/A` for tensor fallback. |
+| Name     | Type     | Description                                                                  |
+| -------- | -------- | ---------------------------------------------------------------------------- |
+| `image`  | `IMAGE`  | The loaded image as a standard ComfyUI tensor.                               |
+| `path`   | `STRING` | Full path of the loaded file, or `fallback:image_input` for tensor fallback. |
+| `width`  | `INT`    | Image width.                                                                 |
+| `height` | `INT`    | Image height.                                                                |
+| `mtime`  | `STRING` | Human-readable modified timestamp, or `N/A` for tensor fallback.             |
 
 ## Fallback Chain
 
@@ -126,20 +126,20 @@ When the configured directory holds no matching image:
 ## Output History and `iter`
 
 When `fallback_image` is connected, the node keeps a **persistent history of
-resolved outputs** for the current workflow configuration (directory + pattern
-+ recursive + sort_by). Each run appends one entry.
+resolved outputs** for the current workflow configuration — the tuple of
+`directory`, `pattern`, `recursive` and `sort_by`. Each run appends one entry.
 
-The history is **append-ordered**, so `iter` 0 is the *oldest* entry: the
+The history is **append-ordered**, so `iter` 0 is the _oldest_ entry: the
 `fallback_image` tensor as it was when it last changed. The widget **starts at
 1**, just past that entry, so the counts below run upward without a jump.
 
-| Event | `iter` becomes | history |
-|---|---|---|
-| starts at | 1 | — |
-| First run with a new tensor | 2 | `[fallback::<sig>]` |
-| Next run, same tensor | 3 | `[fallback::<sig>, /path/img.png]` |
-| `iter` dragged back to 0 | 3 | unchanged — the entry is replayed, not appended |
-| `fallback_image` changes | 2 | `[fallback::<new_sig>]` |
+| Event                       | `iter` becomes | history                                         |
+| --------------------------- | -------------- | ----------------------------------------------- |
+| starts at                   | 1              | —                                               |
+| First run with a new tensor | 2              | `[fallback::<sig>]`                             |
+| Next run, same tensor       | 3              | `[fallback::<sig>, /path/img.png]`              |
+| `iter` dragged back to 0    | 3              | unchanged — the entry is replayed, not appended |
+| `fallback_image` changes    | 2              | `[fallback::<new_sig>]`                         |
 
 After each run the node writes `len(history) + 1` back to the widget, so
 queueing again records the next entry. Dragging `iter` back replays an older
