@@ -17,6 +17,26 @@ from .utils.tensor import prepare_fallback_tensor, tensor_signature
 logger = logging.getLogger(__name__)
 
 
+def _missing_entry_message(entry: str, user_idx: int) -> str:
+    """Explain a history entry whose image is gone.
+
+    The raw `FileNotFoundError` came out of PIL and named neither the entry nor
+    the way out, so the message names both instead of leaving the user to
+    bisect their own history.
+
+    The entry is left in place. History entries are not pruned, and a file that
+    is missing because a drive is unmounted comes back on its own -- pruning on
+    read would throw the whole history away over a transient failure.
+    """
+    return (
+        f"History entry {user_idx} points at an image that no longer exists: "
+        f"{entry}\n"
+        "The history is not pruned, so bring the file back and this entry works "
+        "again. Otherwise move iter past it, or delete this configuration's "
+        "state to start a fresh history."
+    )
+
+
 class LoadMostRecentImage(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -143,6 +163,8 @@ class LoadMostRecentImage(io.ComfyNode):
 
             if user_idx < len(state.history):
                 entry = state.history[user_idx]
+                if not is_fallback_marker(entry) and not Path(entry).exists():
+                    raise ValueError(_missing_entry_message(entry, user_idx))
             else:
                 entry = state.pick_new_entry(
                     lambda: pick_latest_image(

@@ -219,7 +219,11 @@ so that case logs a warning naming the path that will not respond.
 ## Known Limitations
 
 - History entries are absolute paths and are not pruned. If an image is deleted
-  and you drag `iter` onto that entry, the node raises `FileNotFoundError`.
+  and you drag `iter` onto that entry, the node raises a `ValueError` naming
+  the entry and the path. The entry stays on disk rather than being pruned: a
+  file missing because a drive is unmounted comes back on its own, and pruning
+  on read would discard the whole history over a transient failure. Move `iter`
+  past the entry, or bring the file back.
 - `created` means inode-change time on Linux, not creation time.
 - `fingerprint_inputs` falls back to a timestamp on any error, so an
   unreadable directory re-runs the node rather than failing.

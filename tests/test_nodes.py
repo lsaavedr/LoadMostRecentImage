@@ -1,5 +1,6 @@
 import os
 import time
+from pathlib import Path
 
 import pytest
 import torch
@@ -148,6 +149,77 @@ def test_iter_past_history_appends_and_advances(
 def test_execute_without_images_or_fallback_raises_actionable_error(empty_dir):
     with pytest.raises(ValueError, match=r"No image matched .* in .*fallback_image"):
         _execute(empty_dir)
+
+
+def test_deleted_history_entry_names_the_entry_and_the_way_out(
+    image_dir, fallback, pkg_state_dir
+):
+    """A pruned-looking history still points at files that can disappear.
+
+    PIL raised a bare FileNotFoundError naming neither the entry nor the way
+    out, so the message has to carry both -- otherwise the user bisects their
+    own history to find out which slot is broken.
+    """
+    _execute(image_dir, fallback_image=fallback)  # history = [marker]
+    Image.new("RGB", (4, 2), (0, 255, 0)).save(image_dir / "second.png")
+    _execute(image_dir, fallback_image=fallback, iter=2)  # appends it
+
+    key = _only_key(pkg_state_dir)
+    entries = pkg_state.load_persistent_state(key)["history"]
+    stale = entries[1]
+    Path(stale).unlink()
+
+    with pytest.raises(ValueError) as excinfo:
+        _execute(image_dir, fallback_image=fallback, iter=1)
+
+    message = str(excinfo.value)
+    assert stale in message
+    assert "entry 1" in message
+    assert "move iter past it" in message
+
+
+def test_missing_history_entry_is_not_pruned(image_dir, fallback, pkg_state_dir):
+    """A file can be gone because a drive is unmounted, not because it is gone.
+
+    Pruning on read would throw away the entire history over a transient
+    failure, so the entry stays and comes back to life with the file.
+    """
+    _execute(image_dir, fallback_image=fallback)
+    Image.new("RGB", (4, 2), (0, 255, 0)).save(image_dir / "second.png")
+    _execute(image_dir, fallback_image=fallback, iter=2)
+
+    key = _only_key(pkg_state_dir)
+    stale = pkg_state.load_persistent_state(key)["history"][1]
+    Path(stale).unlink()
+
+    with pytest.raises(ValueError):
+        _execute(image_dir, fallback_image=fallback, iter=1)
+
+    assert pkg_state.load_persistent_state(key)["history"][1] == stale
+
+    # the file comes back, and the same entry works again
+    Image.new("RGB", (4, 2), (0, 255, 0)).save(stale)
+
+    assert _execute(image_dir, fallback_image=fallback, iter=1).args[1] == stale
+
+
+def test_missing_history_entry_does_not_affect_neighbouring_entries(
+    image_dir, fallback, pkg_state_dir
+):
+    """Only the slot that points at a missing file should fail. Markers and
+    healthy entries keep working, otherwise one deleted file would take the
+    whole widget out."""
+    _execute(image_dir, fallback_image=fallback)  # history = [marker]
+    Image.new("RGB", (4, 2), (0, 255, 0)).save(image_dir / "second.png")
+    _execute(image_dir, fallback_image=fallback, iter=2)  # history = [marker, second]
+
+    key = _only_key(pkg_state_dir)
+    stale = pkg_state.load_persistent_state(key)["history"][1]
+    Path(stale).unlink()
+
+    assert _execute(image_dir, fallback_image=fallback, iter=0).args[1] == (
+        "fallback:image_input"
+    )
 
 
 @pytest.fixture()
