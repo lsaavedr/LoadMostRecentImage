@@ -45,20 +45,33 @@ def load_persistent_state(key):
     return {"history": [], "last_fb_sig": None}
 
 
-def clear_persistent_states() -> bool:
-    """Delete every persisted state file (called when the UI reloads).
+def clear_persistent_states(keys: list[str] | None = None) -> bool:
+    """Delete persisted state files.
 
-    Also sweeps `*.tmp`: `save_persistent_state` stages into one before
-    renaming, so a write interrupted mid-dump leaves a partial file behind.
+    ``keys`` limits the deletion to those configurations -- the caller computes
+    them with `make_state_key`, which lives in `history` and imports this
+    module, so it cannot be done here without a circular import. `None` sweeps
+    every state file, which is only correct when forgetting everything is
+    really the intent.
+
+    `*.tmp` is swept either way: `save_persistent_state` stages into one before
+    renaming, so a write interrupted mid-dump leaves a partial file behind, and
+    those belong to no configuration in particular.
 
     Returns whether the sweep actually finished. A caller cannot otherwise tell
     a reset from a failed one, and the caller here is an HTTP route whose only
     other signal is the widget moving back to 1 regardless.
     """
     try:
-        for pattern in ("*.json", "*.tmp"):
-            for p in STATE_DIR.glob(pattern):
-                p.unlink(missing_ok=True)
+        targets = (
+            list(STATE_DIR.glob("*.json"))
+            if keys is None
+            else [state_path(k) for k in keys]
+        )
+        for p in targets:
+            p.unlink(missing_ok=True)
+        for p in STATE_DIR.glob("*.tmp"):
+            p.unlink(missing_ok=True)
     except OSError as exc:
         logger.warning("clear_persistent_states failed: %s", exc)
         return False

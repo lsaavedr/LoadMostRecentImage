@@ -15,18 +15,20 @@ function fakeApp() {
 function fakeNode({
   comfyClass = "LoadMostRecentImage",
   widgetValue = 0,
+  directory = "",
 } = {}) {
   const widget = { name: "iter", value: widgetValue, callback: null };
+  const dirWidget = { name: "directory", value: directory, callback: null };
   const node = {
     comfyClass,
     id: 7,
-    widgets: [widget],
+    widgets: [dirWidget, widget],
     onExecuted: null,
     setDirtyCanvas(a, b) {
       this.dirtied = a && b;
     },
   };
-  return { node, widget };
+  return { node, widget, dirWidget };
 }
 
 test("nodeCreated ignores nodes of other classes", async () => {
@@ -81,12 +83,15 @@ test("afterConfigureGraph resets iter to 1 on every matching node", async () => 
   const ext = createExtension(app);
   const { node: n1, widget: w1 } = fakeNode({ widgetValue: 5 });
   const { node: n2, widget: w2 } = fakeNode({ widgetValue: 9 });
-  const { node: other } = fakeNode({ comfyClass: "Other", widgetValue: 4 });
+  const { node: other, widget: wOther } = fakeNode({
+    comfyClass: "Other",
+    widgetValue: 4,
+  });
   app.graph._nodes = [n1, n2, other];
   await ext.afterConfigureGraph();
   assert.equal(w1.value, 1);
   assert.equal(w2.value, 1);
-  assert.equal(other.widgets[0].value, 4);
+  assert.equal(wOther.value, 4);
 });
 
 test("onExecuted ignores empty iter arrays", async () => {
@@ -133,10 +138,128 @@ test("afterConfigureGraph clears persisted history on the backend", async () => 
     globalThis.fetch = realFetch;
   }
 
-  assert.deepEqual(calls, [
-    ["/load_most_recent_image/clear_history", { method: "POST" }],
-  ]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], "/load_most_recent_image/clear_history");
+  assert.equal(calls[0][1].method, "POST");
   assert.equal(widget.value, 1);
+});
+
+test("afterConfigureGraph names its configurations in the request", async () => {
+  // The whole point: the backend deletes only the configurations listed here.
+  // If the body were missing, opening one workflow would wipe every other.
+  const app = fakeApp();
+  const ext = createExtension(app);
+  const { node, widget } = fakeNode({ widgetValue: 3 });
+  node.widgets = [
+    { name: "directory", value: "/work/out" },
+    { name: "pattern", value: ".*\\.png$" },
+    { name: "recursive", value: "true" },
+    { name: "sort_by", value: "created" },
+    widget,
+  ];
+  app.graph._nodes = [node];
+
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    calls.push([url, opts]);
+    return { ok: true, status: 200 };
+  };
+  try {
+    await ext.afterConfigureGraph();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  const body = JSON.parse(calls[0][1].body);
+  assert.deepEqual(body, {
+    configs: [
+      {
+        directory: "/work/out",
+        pattern: ".*\\.png$",
+        recursive: "true",
+        sort_by: "created",
+      },
+    ],
+  });
+});
+
+test("afterConfigureGraph sends one entry per configured node", async () => {
+  const app = fakeApp();
+  const ext = createExtension(app);
+  const first = fakeNode({ widgetValue: 4, directory: "/work/a" });
+  const second = fakeNode({ widgetValue: 9, directory: "/work/b" });
+  app.graph._nodes = [first.node, second.node];
+
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    calls.push([url, opts]);
+    return { ok: true, status: 200 };
+  };
+  try {
+    await ext.afterConfigureGraph();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  const { configs } = JSON.parse(calls[0][1].body);
+  assert.equal(configs.length, 2);
+  assert.deepEqual(
+    configs.map((c) => c.directory),
+    ["/work/a", "/work/b"],
+  );
+  assert.equal(first.widget.value, 1);
+  assert.equal(second.widget.value, 1);
+});
+
+test("afterConfigureGraph sends an empty list when the graph has none", async () => {
+  // An empty list is not the same as no body: the backend sweeps everything
+  // rather than reading it as a malformed request.
+  const app = fakeApp();
+  const ext = createExtension(app);
+  app.graph._nodes = [];
+
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    calls.push([url, opts]);
+    return { ok: true, status: 200 };
+  };
+  try {
+    await ext.afterConfigureGraph();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  assert.deepEqual(JSON.parse(calls[0][1].body), { configs: [] });
+});
+
+test("afterConfigureGraph omits a widget that does not exist", async () => {
+  // JSON.stringify drops undefined keys, so an absent widget arrives as an
+  // absent key. The backend then applies execute's defaults for it, rather
+  // than computing a key the node would never write.
+  const app = fakeApp();
+  const ext = createExtension(app);
+  const { node } = fakeNode({});
+  node.widgets = [{ name: "directory", value: "/work/solo" }];
+  app.graph._nodes = [node];
+
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    calls.push([url, opts]);
+    return { ok: true, status: 200 };
+  };
+  try {
+    await ext.afterConfigureGraph();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  const { configs } = JSON.parse(calls[0][1].body);
+  assert.deepEqual(configs, [{ directory: "/work/solo" }]);
+  assert.equal("pattern" in configs[0], false);
 });
 
 test("afterConfigureGraph warns when the backend could not clear", async () => {

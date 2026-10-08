@@ -202,9 +202,18 @@ workflow clears all of them, which is why they do not accumulate in practice.
 ## History Is Cleared on Workflow Reload
 
 Loading a workflow is a new session, so the frontend posts to
-`/load_most_recent_image/clear_history`, which deletes every persisted state
-file and resets `iter` to 1. A node whose history you want to survive needs the
-workflow to stay open.
+`/load_most_recent_image/clear_history` and resets `iter` to 1. A node whose
+history you want to survive needs the workflow to stay open.
+
+The request carries the configurations of the nodes in the graph that just
+loaded, and the route deletes only those. Clearing everything instead would
+mean that opening a second workflow wiped the first one's history — including
+work you had done in it — so switching workflows back and forth costs you the
+history of the one you return to. The keys are computed server-side with the
+same function `execute` uses, so the file cleared is the file the node wrote.
+
+`iter` resets to 1 either way, so if a clear fails the widget can disagree with
+what is on disk; that is why the route reports the outcome.
 
 The route answers `500` with `{"status": "error"}` if the sweep did not
 finish — a read-only state directory, for instance — and the frontend warns in

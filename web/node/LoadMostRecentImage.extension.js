@@ -80,11 +80,40 @@ export function createExtension(app) {
 
     async afterConfigureGraph() {
       // A fresh page shows a brand-new session:
-      //  - the widget counter goes back to 0
-      //  - the backend's persisted history is wiped
+      //  - the widget counter goes back to 1
+      //  - the backend's persisted history for THIS graph's configurations
+      //    is wiped
+      //
+      // The configurations travel with the request on purpose. Clearing
+      // everything from the backend side also destroyed the history of
+      // workflows the user was not looking at: opening a second workflow
+      // wiped the one they had been working in. The keys are computed
+      // server-side from these values, so they match what execute() will
+      // compute for the same node.
+      const configs = [];
+      for (const node of app.graph._nodes || []) {
+        if (node.comfyClass !== "LoadMostRecentImage") {
+          continue;
+        }
+        const valueOf = (name) =>
+          node.widgets?.find((w) => w.name === name)?.value;
+        configs.push({
+          directory: valueOf("directory"),
+          pattern: valueOf("pattern"),
+          recursive: valueOf("recursive"),
+          sort_by: valueOf("sort_by"),
+        });
+        const iterWidget = node.widgets?.find((w) => w.name === "iter");
+        if (iterWidget) {
+          iterWidget.value = 1;
+        }
+      }
+
       try {
         const res = await fetch("/load_most_recent_image/clear_history", {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ configs }),
         });
         if (res && res.ok === false) {
           console.warn(
@@ -95,15 +124,6 @@ export function createExtension(app) {
         }
       } catch (e) {
         // No backend available (e.g. unit tests) — ignore.
-      }
-      for (const node of app.graph._nodes || []) {
-        if (node.comfyClass !== "LoadMostRecentImage") {
-          continue;
-        }
-        const iterWidget = node.widgets?.find((w) => w.name === "iter");
-        if (iterWidget) {
-          iterWidget.value = 1;
-        }
       }
     },
   };
