@@ -164,6 +164,13 @@ which moves when a file is renamed, chmod'd, or hard-linked. A true birth time
 would need `statx`, which this node does not use. If you want "the image I
 just generated", leave this on `modified`.
 
+When several files share the same timestamp, the **path** decides, so the
+choice is stable across restarts. Without that tiebreak the node returned a
+different image on every launch, since the candidates are deduplicated through
+a set whose iteration order Python randomises per process. Ties are routine
+after an `rsync -t`, a `git checkout` of images, or on a filesystem with
+one-second timestamps.
+
 ## Caching
 
 `fingerprint_inputs` (ComfyUI's input-cache hook) keys on the newest matching
@@ -199,8 +206,15 @@ Loading a workflow is a new session, so the frontend posts to
 file and resets `iter` to 1. A node whose history you want to survive needs the
 workflow to stay open.
 
+The route answers `500` with `{"status": "error"}` if the sweep did not
+finish — a read-only state directory, for instance — and the frontend warns in
+the browser console, because `fetch` does not throw on an HTTP error status.
+The widget still resets to `1` either way, so after a failed clear the history
+on disk is older than the widget suggests and the next run appends to it.
+
 The route is a no-op if ComfyUI's `PromptServer` is not present, so importing
-the package outside ComfyUI does not fail.
+the package outside ComfyUI does not fail. Nothing retries the registration,
+so that case logs a warning naming the path that will not respond.
 
 ## Known Limitations
 
@@ -209,6 +223,11 @@ the package outside ComfyUI does not fail.
 - `created` means inode-change time on Linux, not creation time.
 - `fingerprint_inputs` falls back to a timestamp on any error, so an
   unreadable directory re-runs the node rather than failing.
+- A `pattern` is matched against the filename only, so a pattern containing a
+  `/` never matches, not even with `recursive` on. Match on the name and use
+  `recursive` to widen the search.
+- A failed `clear_history` resets `iter` to 1 without resetting the history on
+  disk; see above.
 
 ## CI
 
