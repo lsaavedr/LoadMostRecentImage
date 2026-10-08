@@ -103,20 +103,30 @@ def test_first_fallback_run_reports_len_history_plus_one(image_dir, fallback):
     assert _iter_of(out) == 2  # reset_for_tensor leaves 1 entry -> 1 + 1
 
 
-def test_repeat_run_reuses_entry_without_writing(
+def test_iter_starts_past_the_seeded_entry():
+    """1 rather than 0, so the widget counts up instead of jumping 0 -> 2."""
+    schema = LoadMostRecentImage.define_schema()
+    iter_input = next(i for i in schema.kwargs["inputs"] if i.args[0] == "iter")
+
+    assert iter_input.kwargs["default"] == 1
+
+
+def test_dragging_iter_back_replays_without_writing(
     image_dir, fallback, pkg_state_dir, save_calls
 ):
-    first = _execute(image_dir, fallback_image=fallback)
+    """A reused entry mutates nothing: no append, no state rewrite."""
+    _execute(image_dir, fallback_image=fallback)  # history=[marker], widget -> 2
+    _execute(image_dir, fallback_image=fallback, iter=2)  # appends, widget -> 3
+
     key = _only_key(pkg_state_dir)
-    state_after_first = (pkg_state_dir / f"{key}.json").read_text()
-    assert len(save_calls) == 1  # only reset_for_tensor
+    state_before = (pkg_state_dir / f"{key}.json").read_text()
+    writes_before = len(save_calls)
 
-    second = _execute(image_dir, fallback_image=fallback)
+    replayed = _execute(image_dir, fallback_image=fallback, iter=0)
 
-    assert _iter_of(first) == _iter_of(second)
-    # Reuse mutates nothing, so it must neither append nor rewrite the state.
-    assert save_calls == [key]
-    assert (pkg_state_dir / f"{key}.json").read_text() == state_after_first
+    assert replayed.args[1] == "fallback:image_input"
+    assert len(save_calls) == writes_before
+    assert (pkg_state_dir / f"{key}.json").read_text() == state_before
 
 
 def test_iter_past_history_appends_and_advances(

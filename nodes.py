@@ -48,15 +48,16 @@ class LoadMostRecentImage(io.ComfyNode):
                 io.Image.Input("fallback_image", optional=True),
                 io.Int.Input(
                     "iter",
-                    default=0,
+                    default=1,
                     min=0,
                     max=1000000,
                     step=1,
                     tooltip="Position in the fallback_image history, which gains one entry per run.\n"
                     "The history is append-ordered, so 0 is the oldest entry: the tensor\n"
-                    "as it was when it last changed. An index at or past the end records\n"
-                    "the newest matching image as a new entry. After each run this widget\n"
-                    "is set to the new end, so queueing again appends the next one.\n"
+                    "as it was when it last changed. It starts at 1, just past that entry,\n"
+                    "so the first run records the newest matching image. An index at or\n"
+                    "past the end records the newest image as a new entry, and after each\n"
+                    "run this widget moves to the new end.\n"
                     "Changing the fallback_image tensor resets the history.",
                     optional=True,
                 ),
@@ -123,7 +124,7 @@ class LoadMostRecentImage(io.ComfyNode):
         recursive="false",
         sort_by="modified",
         fallback_image=None,
-        iter=0,
+        iter=1,
     ) -> io.NodeOutput:
         user_idx = max(0, int(iter))
 

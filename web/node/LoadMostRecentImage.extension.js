@@ -19,7 +19,7 @@ export function createExtension(app) {
         iterWidget.value === null ||
         iterWidget.value === ""
       ) {
-        iterWidget.value = 0;
+        iterWidget.value = 1;
       }
 
       const originalOnExecuted = node.onExecuted;
@@ -95,7 +95,7 @@ export function createExtension(app) {
         }
         const iterWidget = node.widgets?.find((w) => w.name === "iter");
         if (iterWidget) {
-          iterWidget.value = 0;
+          iterWidget.value = 1;
         }
       }
     },

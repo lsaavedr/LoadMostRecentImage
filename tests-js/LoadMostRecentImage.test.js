@@ -76,7 +76,7 @@ test("widget callback treats empty values as 0", async () => {
   assert.ok(true); // callback did not throw
 });
 
-test("afterConfigureGraph resets iter to 0 on every matching node", async () => {
+test("afterConfigureGraph resets iter to 1 on every matching node", async () => {
   const app = fakeApp();
   const ext = createExtension(app);
   const { node: n1, widget: w1 } = fakeNode({ widgetValue: 5 });
@@ -84,8 +84,8 @@ test("afterConfigureGraph resets iter to 0 on every matching node", async () => 
   const { node: other } = fakeNode({ comfyClass: "Other", widgetValue: 4 });
   app.graph._nodes = [n1, n2, other];
   await ext.afterConfigureGraph();
-  assert.equal(w1.value, 0);
-  assert.equal(w2.value, 0);
+  assert.equal(w1.value, 1);
+  assert.equal(w2.value, 1);
   assert.equal(other.widgets[0].value, 4);
 });
 
@@ -136,7 +136,7 @@ test("afterConfigureGraph clears persisted history on the backend", async () => 
   assert.deepEqual(calls, [
     ["/load_most_recent_image/clear_history", { method: "POST" }],
   ]);
-  assert.equal(widget.value, 0);
+  assert.equal(widget.value, 1);
 });
 
 test("afterConfigureGraph tolerates a missing node list", async () => {
@@ -173,18 +173,18 @@ test("nodeCreated without an iter widget leaves onExecuted unwrapped", async () 
   assert.equal(node.onExecuted, null);
 });
 
-test("nodeCreated normalises a null iter value to 0", async () => {
+test("nodeCreated normalises a null iter value to 1", async () => {
   const ext = createExtension(fakeApp());
   const { node, widget } = fakeNode({ widgetValue: null });
   await ext.nodeCreated(node);
-  assert.equal(widget.value, 0);
+  assert.equal(widget.value, 1);
 });
 
-test("nodeCreated normalises an empty-string iter value to 0", async () => {
+test("nodeCreated normalises an empty-string iter value to 1", async () => {
   const ext = createExtension(fakeApp());
   const { node, widget } = fakeNode({ widgetValue: "" });
   await ext.nodeCreated(node);
-  assert.equal(widget.value, 0);
+  assert.equal(widget.value, 1);
 });
 
 test("widget callback treats undefined as 0", async () => {
