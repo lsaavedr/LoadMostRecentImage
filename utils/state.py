@@ -45,11 +45,15 @@ def load_persistent_state(key):
     return {"history": [], "last_fb_sig": None}
 
 
-def clear_persistent_states():
+def clear_persistent_states() -> bool:
     """Delete every persisted state file (called when the UI reloads).
 
     Also sweeps `*.tmp`: `save_persistent_state` stages into one before
     renaming, so a write interrupted mid-dump leaves a partial file behind.
+
+    Returns whether the sweep actually finished. A caller cannot otherwise tell
+    a reset from a failed one, and the caller here is an HTTP route whose only
+    other signal is the widget moving back to 1 regardless.
     """
     try:
         for pattern in ("*.json", "*.tmp"):
@@ -57,6 +61,8 @@ def clear_persistent_states():
                 p.unlink(missing_ok=True)
     except OSError as exc:
         logger.warning("clear_persistent_states failed: %s", exc)
+        return False
+    return True
 
 
 def save_persistent_state(key, state):

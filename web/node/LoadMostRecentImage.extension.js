@@ -83,9 +83,16 @@ export function createExtension(app) {
       //  - the widget counter goes back to 0
       //  - the backend's persisted history is wiped
       try {
-        await fetch("/load_most_recent_image/clear_history", {
+        const res = await fetch("/load_most_recent_image/clear_history", {
           method: "POST",
         });
+        if (res && res.ok === false) {
+          console.warn(
+            "[LMR] clear_history failed (HTTP " +
+              res.status +
+              "); the persisted history was left in place.",
+          );
+        }
       } catch (e) {
         // No backend available (e.g. unit tests) — ignore.
       }

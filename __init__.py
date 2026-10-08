@@ -25,8 +25,14 @@ def _register_routes() -> None:
 
     @routes.post("/load_most_recent_image/clear_history")
     async def _clear_history_route(request):
-        clear_persistent_states()
-        return web.json_response({"status": "ok"})
+        cleared = clear_persistent_states()
+        # Report the real outcome: the frontend resets the iter widget either
+        # way, so a silent failure leaves it claiming 1 while the old history
+        # is still on disk and the next run appends to it.
+        return web.json_response(
+            {"status": "ok" if cleared else "error"},
+            status=200 if cleared else 500,
+        )
 
 
 WEB_DIRECTORY = "./web"

@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import pathlib
 
 import server
 
@@ -47,3 +48,29 @@ def test_clear_history_route_deletes_state(monkeypatch, tmp_path):
 
     assert response.status == 200
     assert not pkg_state.state_path("k").exists()
+
+
+def test_clear_history_route_reports_a_failed_sweep(monkeypatch, tmp_path):
+    """A clear that did not happen must not answer 200.
+
+    The frontend resets the iter widget whether or not this succeeds, so an
+    unconditional ok leaves the widget at 1 while the old history is still
+    persisted and the next run appends to it instead of starting clean.
+    """
+    monkeypatch.setattr(pkg_state, "STATE_DIR", tmp_path)
+    # Seeded on purpose: an empty directory never attempts a delete, so the
+    # sweep would succeed for the wrong reason and the patch would be dead.
+    pkg_state.save_persistent_state("k", {"history": ["a"]})
+    asyncio.run(comfy_entrypoint())
+
+    def boom(self, **kwargs):
+        raise OSError("Read-only file system")
+
+    monkeypatch.setattr(pathlib.Path, "unlink", boom)
+    handler = server.PromptServer.instance.routes.handlers[
+        "/load_most_recent_image/clear_history"
+    ]
+    response = asyncio.run(handler(None))
+
+    assert response.status == 500
+    assert pkg_state.state_path("k").exists()

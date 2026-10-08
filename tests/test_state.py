@@ -217,5 +217,11 @@ def test_clear_persistent_states_swallows_errors(monkeypatch, caplog):
 
     monkeypatch.setattr(state_mod.Path, "glob", boom)
     with caplog.at_level("WARNING"):
-        clear_persistent_states()
+        assert clear_persistent_states() is False
     assert "clear_persistent_states failed" in caplog.text
+
+
+def test_clear_persistent_states_reports_success(isolated_state_dir):
+    """The route answers from this return value, so success has to be an
+    explicit True and not merely the absence of an exception."""
+    assert clear_persistent_states() is True

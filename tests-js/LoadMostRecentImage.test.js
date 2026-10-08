@@ -139,6 +139,31 @@ test("afterConfigureGraph clears persisted history on the backend", async () => 
   assert.equal(widget.value, 1);
 });
 
+test("afterConfigureGraph warns when the backend could not clear", async () => {
+  // The widget resets to 1 either way, so a silent failure would leave it
+  // claiming a fresh session while the old history is still persisted.
+  const app = fakeApp();
+  const ext = createExtension(app);
+  const { node, widget } = fakeNode({ widgetValue: 7 });
+  app.graph._nodes = [node];
+
+  const realFetch = globalThis.fetch;
+  const origWarn = console.warn;
+  const warnings = [];
+  globalThis.fetch = async () => ({ ok: false, status: 500 });
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    await ext.afterConfigureGraph();
+  } finally {
+    globalThis.fetch = realFetch;
+    console.warn = origWarn;
+  }
+
+  assert.equal(warnings.length, 1);
+  assert.ok(warnings[0].includes("500"));
+  assert.equal(widget.value, 1);
+});
+
 test("afterConfigureGraph tolerates a missing node list", async () => {
   const app = fakeApp();
   delete app.graph._nodes;
