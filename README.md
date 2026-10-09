@@ -27,12 +27,14 @@ already in ComfyUI's requirements.
 
 ### Development
 
-Requires Python 3.12 or newer (the floor is set by `numpy`), and `uv`.
+Requires Python 3.12 or newer (the floor is set by `numpy`), Node 22.15 or
+newer (the web suite needs `module.registerHooks`), and `uv`.
 
 ```bash
 git clone <repo-url>
 cd LoadMostRecentImage
 uv sync --locked
+npm ci
 ```
 
 ## Project Structure
