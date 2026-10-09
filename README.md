@@ -272,6 +272,22 @@ last of them.
 - Step backward through your iteration history while continuing to advance with
   the same upstream tensor.
 
+## Credits
+
+This started as [kevinjwesley-Collab's `LoadMostRecentImage.py` gist][gist], and
+the original is still recognisable throughout. Taken from it: the node's name,
+its `node_id` and `image/loaders` category, the `directory` / `pattern` /
+`recursive` / `sort_by` inputs, the default pattern regex, image discovery, the
+PIL-to-tensor conversion, the `fallback_image` handling with its
+`fallback:image_input` marker, and the shape of the cache key.
+
+Changed since: the node moved to the V3 schema and `fingerprint_inputs`, and
+gained the persistent output history behind the `iter` widget. Two things in
+the original were dropped — the `fallback_path` input, and the prompt extraction
+from PNG metadata with its `positive_prompt` / `negative_prompt` outputs.
+
+[ gist ]: https://gist.github.com/kevinjwesley-Collab/27aef65f306bfbf0b6c67ed4c78318a8
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

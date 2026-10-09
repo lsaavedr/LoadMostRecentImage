@@ -1,3 +1,14 @@
+"""Image discovery, loading and tensor conversion.
+
+Adapted from kevinjwesley-Collab's LoadMostRecentImage gist:
+https://gist.github.com/kevinjwesley-Collab/27aef65f306bfbf0b6c67ed4c78318a8
+
+`DEFAULT_PATTERN`, `list_images` and `pil_to_tensor` are recognisably the
+original's. Changes made here: the leading underscores are gone, `pick_most_recent`
+takes a tiebreak so the pick survives a restart, and the `arr.ndim == 2` branch
+went away because an "L" image is already converted to RGB above it.
+"""
+
 import re
 import time
 from pathlib import Path
